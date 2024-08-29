@@ -1,0 +1,1 @@
+Pettingzoo doesnt accept tensors as action so use action.item if action is tensor in (for example) pettingzoo/utils/wrappers/assert_out_of_bounds.py (what I did), or make skrl return an int instead of a tensor. Also required to change the reward, truncated and terminated values given by pettingzoo into a tensor for skrl.

@@ -1,5 +1,6 @@
 import copy
 
+import numpy as np
 import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from skrl.memories.torch.base import Memory
@@ -22,14 +23,13 @@ env = knights_archers_zombies_v10.parallel_env(
     max_arrows=10,
     max_cycles=900,
     vector_state=False,
-    render_mode="human",
 )
 observations, infos = env.reset()
 
 obs_spaces = {agent: env.observation_space(agent) for agent in env.possible_agents}
 act_spaces = {agent: env.action_space(agent) for agent in env.possible_agents}
+print(act_spaces)
 memories = {agent: Memory(20, device=device) for agent in env.possible_agents}
-
 
 # using the same policy for every agent
 
