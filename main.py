@@ -49,7 +49,6 @@ def train(
         batch_size=256,
         learning_rate=lr,
         gamma=gamma,
-        seed=None,  # for replicability
         n_epochs=10,
         device=device,
     )
