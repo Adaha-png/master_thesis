@@ -12,7 +12,7 @@ from stable_baselines3.ppo import CnnPolicy, MlpPolicy
 
 def train(
     env_fn,
-    steps: int = 10_000,
+    steps: int = 1000,
     seed: int | None = 0,
     device="auto",
     lr=0.0003,
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         max_zombies=10,
         max_arrows=10,
         max_cycles=100,
-        vector_state=False,
+        vector_state=True,
     )
 
     train(env_fn, steps=81_920, seed=0, **env_kwargs)
