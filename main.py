@@ -4,6 +4,7 @@ import glob
 import os
 import time
 
+import optuna
 import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from stable_baselines3 import PPO
@@ -17,6 +18,7 @@ def train(
     device="auto",
     lr=0.0003,
     gamma=0.99,
+    la=0.95,
     **env_kwargs,
 ):
     # Train a single model to play as each agent in an AEC environment
@@ -46,10 +48,11 @@ def train(
         CnnPolicy if visual_observation else MlpPolicy,
         env,
         verbose=3,
-        batch_size=256,
+        batch_size=64,
         learning_rate=lr,
         gamma=gamma,
-        n_epochs=10,
+        gae_lambda=la,
+        n_epochs=30,
         device=device,
     )
 
@@ -124,7 +127,7 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
     return avg_reward
 
 
-if __name__ == "__main__":
+def tuner(trial):
     env_fn = knights_archers_zombies_v10
 
     env_kwargs = dict(
@@ -136,9 +139,15 @@ if __name__ == "__main__":
         max_cycles=100,
         vector_state=True,
     )
+    la = trial.suggest_float("la", 0.9, 0.99)
+    gamma = trial.suggest_float("gamma", 0.8, 0.999)
+    lr = trial.suggest_float("lr", 0.0001, 1)
 
-    train(env_fn, steps=81_920, seed=0, **env_kwargs)
+    train(env_fn, steps=2_000_000, seed=0, lr=lr, gamma=gamma, la=la, **env_kwargs)
 
-    eval(env_fn, num_games=10, render_mode=None, **env_kwargs)
+    return eval(env_fn, num_games=10, render_mode=None, **env_kwargs)
 
-    eval(env_fn, num_games=2, render_mode="human", **env_kwargs)
+
+if __name__ == "__main__":
+    study = optuna.create_study(direction="maximize")
+    study.optimize(tuner, n_trials=30)
