@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import glob
 import os
-import time
 import pickle
+import time
+
 import optuna
 import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
@@ -149,6 +150,10 @@ def tuner(trial):
 
 
 if __name__ == "__main__":
-        
-    study = optuna.create_study(study_name = "tuning", direction="maximize", load_if_exists=True, storage="")
-    study.optimize(tuner, n_trials=30, n_jobs=5)
+    study = optuna.create_study(
+        study_name="tuning",
+        direction="maximize",
+        load_if_exists=True,
+        storage="sqlite:///tuning.db",
+    )
+    study.optimize(tuner, n_trials=32, n_jobs=4)
