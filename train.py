@@ -1,5 +1,6 @@
 import optuna
 from pettingzoo.butterfly import knights_archers_zombies_v10
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from train_eval import eval, train
 
@@ -27,4 +28,14 @@ if __name__ == "__main__":
     print(
         f"Using learning rate: {lr:.6f}, discount factor: {gamma:.3f}, TD parameter: {la:.3f}"
     )
-    train(env_fn, lr=lr, gamma=gamma, la=la, **env_kwargs)
+    checkpoint_callback = CheckpointCallback(
+        save_freq=1e4, save_path="./model_checkpoints/"
+    )
+    train(
+        env_fn,
+        lr=lr,
+        gamma=gamma,
+        la=la,
+        callback=checkpoint_callback,
+        **env_kwargs,
+    )

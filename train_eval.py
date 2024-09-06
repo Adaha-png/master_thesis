@@ -15,6 +15,7 @@ def train(
     lr=0.0003,
     gamma=0.99,
     la=0.95,
+    callback=None,
     **env_kwargs,
 ):
     # Train a single model to play as each agent in an AEC environment
@@ -51,8 +52,10 @@ def train(
         n_epochs=30,
         device=device,
     )
-
-    model.learn(total_timesteps=steps)
+    if not callback:
+        model.learn(total_timesteps=steps)
+    else:
+        model.learn(total_timesteps=steps, callback=callback)
 
     model.save(f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}")
 
