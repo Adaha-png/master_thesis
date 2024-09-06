@@ -10,7 +10,7 @@ from stable_baselines3.ppo import CnnPolicy, MlpPolicy
 def train(
     env_fn,
     steps: int = 10_000_000,
-    seed: int | None = 0,
+    seed = 0,
     device="auto",
     lr=0.0003,
     gamma=0.99,
@@ -63,7 +63,7 @@ def train(
     env.close()
 
 
-def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwargs):
+def eval(env_fn, num_games: int = 100, render_mode = None, **env_kwargs):
     # Evaluate a trained agent vs a random agent
     env = env_fn.env(render_mode=render_mode, **env_kwargs)
 
