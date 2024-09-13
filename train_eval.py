@@ -5,19 +5,25 @@ import time
 import supersuit as ss
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import CnnPolicy, MlpPolicy
+from pettingzoo.butterfly import knights_archers_zombies_v10
+
+
+
+
+
 
 
 def train(
     env_fn,
     steps: int = 10_000_000,
-    seed = 0,
+    seed=0,
     device="auto",
     lr=0.0003,
     gamma=0.99,
     la=0.95,
     callback=None,
     **env_kwargs,
-):
+    ):
     # Train a single model to play as each agent in an AEC environment
     env = env_fn.parallel_env(**env_kwargs)
 
@@ -66,7 +72,7 @@ def train(
     env.close()
 
 
-def eval(env_fn, num_games: int = 100, render_mode = None, **env_kwargs):
+def eval(env_fn, num_games: int = 100, render_mode=None, **env_kwargs):
     # Evaluate a trained agent vs a random agent
     env = env_fn.env(render_mode=render_mode, **env_kwargs)
 
@@ -84,7 +90,7 @@ def eval(env_fn, num_games: int = 100, render_mode = None, **env_kwargs):
 
     try:
         latest_policy = max(
-            glob.glob(f"{env.metadata['name']}*.zip"), key=os.path.getctime
+            glob.glob("model_checkpoints/rl_model_*_steps.zip"), key=os.path.getctime
         )
     except ValueError:
         print("Policy not found.")
@@ -124,3 +130,24 @@ def eval(env_fn, num_games: int = 100, render_mode = None, **env_kwargs):
     print("Avg reward per agent, per game: ", avg_reward_per_agent)
     print("Full rewards: ", rewards)
     return avg_reward
+
+
+if __name__ == "__main__":
+    env_fn = knights_archers_zombies_v10
+
+    env_kwargs = dict(
+        spawn_rate=20,
+        num_archers=2,
+        num_knights=2,
+        max_zombies=10,
+        max_arrows=10,
+        max_cycles=900,
+        vector_state=True,
+    )
+
+    eval(
+        env_fn,
+        num_games = 2,
+        render_mode = "human",
+        **env_kwargs,
+    )
