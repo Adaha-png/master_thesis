@@ -1,3 +1,5 @@
 .venv
 ruff.toml
 knights_archers_zombies_*.zip
+progress.html
+
