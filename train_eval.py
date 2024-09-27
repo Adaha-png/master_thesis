@@ -90,8 +90,9 @@ def eval(env_fn, num_games: int = 100, render_mode=None, **env_kwargs):
 
     try:
         latest_policy = max(
-            glob.glob("model_checkpoints/rl_model_*_steps.zip"), key=os.path.getctime
+                glob.glob("model_checkpoints/rl_model_*_steps.zip"), key=os.path.getctime
         )
+        latest_policy = "model_checkpoints/rl_model_3200000_steps.zip"
     except ValueError:
         print("Policy not found.")
         exit(0)
@@ -145,9 +146,14 @@ if __name__ == "__main__":
         vector_state=True,
     )
 
+    # eval(
+    #     env_fn,
+    #     num_games = 2,
+    #     render_mode = "human",
+    #     **env_kwargs,
+    # )
+
     eval(
         env_fn,
-        num_games = 2,
-        render_mode = "human",
-        **env_kwargs,
+            **env_kwargs,
     )
