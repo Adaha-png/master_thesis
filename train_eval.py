@@ -178,8 +178,19 @@ if __name__ == "__main__":
         print("Invalid env entered")
         exit(0)
 
+    # eval(
+    #     env_fn,
+    #     num_games = 2,
+    #     render_mode = "human",
+    #     **env_kwargs,
+    # )
+
     eval(
         env_fn,
+<<<<<<< HEAD
         num_games=100,
         **env_kwargs,
+=======
+            **env_kwargs,
+>>>>>>> 26b1e1d1f485617d6ba8c80c606d9382fd3ed8a6
     )
