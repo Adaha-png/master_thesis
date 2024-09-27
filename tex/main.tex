@@ -94,7 +94,11 @@ Another, and perhaps more important, use case is safety. If when online, i.e. th
 \medskip
 
 \subsection{Definition of intent}
-We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We define these sets of trajectories, along with their probabilities believed by a certain agent $A$, as the intent of the agent. The agent $A_0$ only has information about $a_0$ in the set $\textbf{a}$
+We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We define these sets of trajectories, along with their probabilities believed by a certain agent $A$, as the intent of the agent. The agent $A_0$ only has information about $a_0$ in the set $\textbf{a}$.
+
+How do we separate intent of 1 one and agent 2
+
+Extract intent from trajectory, start with reward
 
 
 \section{Relevant methods}
@@ -164,9 +168,9 @@ Cooperation index
 \section{--Lazy agents}
 
 \section{--Same intent for same state? Different policies?}
-Swap homogenous agents to see intent difference
+Swap homogeneous agents to see intent difference
 
-\section{--Change environemt, related to permutation importance}
+\section{--Change environment, related to permutation importance}
 
 \section{--Feature importance}
 Detect which zombies agents care about
