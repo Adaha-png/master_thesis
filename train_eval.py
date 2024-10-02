@@ -151,6 +151,13 @@ if __name__ == "__main__":
         help="How many games to simulate",
         default=100,
     )
+    parser.add_argument(
+        "-r",
+        "--render",
+        type=str,
+        help="How to render if any, default None",
+        default=None,
+    )
     args = parser.parse_args()
 
     if args.env == "spread":
@@ -187,10 +194,7 @@ if __name__ == "__main__":
 
     eval(
         env_fn,
-<<<<<<< HEAD
         num_games=100,
+        render_mode=args.render,
         **env_kwargs,
-=======
-            **env_kwargs,
->>>>>>> 26b1e1d1f485617d6ba8c80c606d9382fd3ed8a6
     )
