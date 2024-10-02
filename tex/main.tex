@@ -165,7 +165,18 @@ Expectation of other agents actions.
 \section{--Synergy/intent collision}
 Cooperation index
 
-\section{--Lazy agents}
+\section{--Lazy agents/sparse rewards}
+archers train fine, knights only start learning anything useful after a very long time, ~12M timesteps, then not stable
+
+-alternate reward structure?
+
+-memories to focus more on knights?
+
+-policy architecture?
+
+-start with only training knights at first then add archers as well? (eg. 4 knights -> 2 knights, 2 archers) for consistent action and observation space. Similar to using a reward structure where only knights gain rewards for n timesteps before both knights and archers gain rewards. 
+
+-Possible to not have the same reward for every agent, but then no centralised critic
 
 \section{--Same intent for same state? Different policies?}
 Swap homogeneous agents to see intent difference
@@ -177,7 +188,6 @@ Detect which zombies agents care about
 saliency maps
 
 \section{--Feature permutation changes, for other agents and zombies}
-
 \bibliography{ref}{}
 \bibliographystyle{unsrt}
 \end{document}
