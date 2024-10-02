@@ -38,7 +38,6 @@ def train(
     env = ss.concat_vec_envs_v1(env, 8, num_cpus=1, base_class="stable_baselines3")
 
     if not model:
-        # Use a CNN policy if the observation space is visual
         model = PPO(
             MlpPolicy,
             env,
@@ -50,6 +49,7 @@ def train(
             n_epochs=30,
             device=device,
         )
+
     if not callback:
         model.learn(total_timesteps=steps)
     else:
@@ -76,7 +76,6 @@ def eval(
     tune=False,
     **env_kwargs,
 ):
-    # Evaluate a trained agent vs a random agent
     env = env_fn.env(render_mode=render_mode, **env_kwargs)
 
     print(
@@ -122,10 +121,7 @@ def eval(
             if termination or truncation:
                 break
             else:
-                if agent == env.possible_agents[0]:
-                    act = env.action_space(agent).sample()
-                else:
-                    act = model.predict(obs, deterministic=True)[0]
+                act = model.predict(obs, deterministic=True)[0]
             env.step(act)
     env.close()
 
