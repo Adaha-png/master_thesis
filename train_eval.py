@@ -36,7 +36,7 @@ def train(
     print(f"Starting training on {str(env.metadata['name'])}.")
 
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=1, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 8, num_cpus=4, base_class="stable_baselines3")
 
     if not model:
         model = PPO(
@@ -78,7 +78,7 @@ def eval(
     **env_kwargs,
 ):
     env = env_fn.parallel_env(render_mode=render_mode, **env_kwargs)
-
+    num_agents = len(env_fn.env(**env_kwargs).possible_agents)
     print(
         f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
     )
@@ -107,13 +107,12 @@ def eval(
 
     model = PPO.load(latest_policy)
 
-    rewards = {agent: 0 for agent in env.possible_agents}
-
+    env = ss.black_death_v3(env)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
     episode_rewards = []
-    agent_reward = np.zeros(3)
+    agent_reward = np.zeros(num_agents)
     for i in range(num_games):
         obs = env.reset()
         done = False
@@ -177,16 +176,9 @@ if __name__ == "__main__":
         print("Invalid env entered")
         exit(0)
 
-    # eval(
-    #     env_fn,
-    #     num_games = 2,
-    #     render_mode = "human",
-    #     **env_kwargs,
-    # )
-
     eval(
         env_fn,
-        num_games=100,
+        num_games=args.num_games,
         render_mode=args.render,
         **env_kwargs,
     )
