@@ -108,31 +108,24 @@ def eval(
 
     rewards = {agent: 0 for agent in env.possible_agents}
 
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 8, num_cpus=1, base_class="stable_baselines3")
+
+    episode_rewards = []
     for i in range(num_games):
         env.reset(seed=i)
         env.action_space(env.possible_agents[0]).seed(i)
+        done = False
+        while not done:
+            action, _states = model.predict(obs)
+            obs, rewards, dones, infos = env.step(action)
+            episode_reward += sum(rewards)
+            done = all(dones)
+        episode_rewards.append(episode_reward)
 
-        for agent in env.agent_iter():
-            obs, reward, termination, truncation, info = env.last()
-
-            for a in env.agents:
-                rewards[a] += env.rewards[a]
-
-            if termination or truncation:
-                break
-            else:
-                act = model.predict(obs, deterministic=True)[0]
-            env.step(act)
     env.close()
 
-    avg_reward = sum(rewards.values()) / len(rewards.values())
-    avg_reward_per_agent = {
-        agent: rewards[agent] / num_games for agent in env.possible_agents
-    }
-    print(f"Avg reward: {avg_reward}")
-    print("Avg reward per agent, per game: ", avg_reward_per_agent)
-    print("Full rewards: ", rewards)
-    return avg_reward
+    return np.mean(episode_rewards)
 
 
 if __name__ == "__main__":
