@@ -3,6 +3,7 @@ import glob
 import os
 import time
 
+import numpy as np
 import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
@@ -76,7 +77,7 @@ def eval(
     tune=False,
     **env_kwargs,
 ):
-    env = env_fn.env(render_mode=render_mode, **env_kwargs)
+    env = env_fn.parallel_env(render_mode=render_mode, **env_kwargs)
 
     print(
         f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
@@ -109,22 +110,24 @@ def eval(
     rewards = {agent: 0 for agent in env.possible_agents}
 
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=1, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
     episode_rewards = []
+    agent_reward = np.zeros(3)
     for i in range(num_games):
-        env.reset(seed=i)
-        env.action_space(env.possible_agents[0]).seed(i)
+        obs = env.reset()
         done = False
+        episode_reward = 0
         while not done:
             action, _states = model.predict(obs)
             obs, rewards, dones, infos = env.step(action)
+            agent_reward += rewards
             episode_reward += sum(rewards)
             done = all(dones)
         episode_rewards.append(episode_reward)
 
     env.close()
-
+    print(agent_reward / num_games)
     return np.mean(episode_rewards)
 
 
