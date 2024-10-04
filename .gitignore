@@ -6,4 +6,8 @@ tune_simple_spread_v3
 simple_spread_v3
 knights_archers_zombies_v10
 progress.html
-
+tex/main.aux
+tex/main.out
+tex/main.log
+tex/main.toc
+tex/main.pdf
