@@ -21,7 +21,8 @@ def action_difference(sequence1, *actions_list2):
     # Initialize a counter for differing values
 
     actions_list2 = np.floor(actions_list2)
-    differences = np.sum(actions_list1 != actions_list2)
+    actions_list2 = np.clip(actions_list2, a_min=0, a_max=4)
+    differences = -np.sum(actions_list1 != actions_list2)
     return differences
 
 
@@ -31,9 +32,9 @@ def reward_difference(env, sequence1, *chosen_actions):
     chosen_actions = [int(a) for a in chosen_actions]
 
     chosen_actions = np.reshape(
-        chosen_actions, shape=(len(sequence1), len(rewards_list1[0]))
+        chosen_actions, newshape=(len(sequence1), len(rewards_list1[0]))
     )
-    chosen_actions = np.clip(chosen_actions, min=0, max=4)
+    chosen_actions = np.clip(chosen_actions, a_min=0, a_max=4)
     sequence2 = sim_steps(
         env,
         None,
@@ -62,9 +63,18 @@ def counterfactuals(env, sequence: List[Dict]):
         same_range=True,
     )
 
-    evolution = Evolution(problem)
+    evolution = Evolution(problem, num_of_generations=1000)
 
-    print(evolution.evolve())
+    individuals = evolution.evolve()
+
+    best_fit = -np.inf
+    best_actions = None
+    for i in individuals:
+        actions = i.features
+        if reward_objective(*actions) + action_objective(*actions) > best_fit:
+            best_fit = reward_objective(*actions) + action_objective(*actions)
+            best_actions = actions
+    print(reward_objective(*best_actions), action_objective(*best_actions))
 
 
 if __name__ == "__main__":
