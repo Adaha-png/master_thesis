@@ -10,32 +10,30 @@ from nsga2.evolution import Evolution
 from nsga2.problem import Problem
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from stable_baselines3 import PPO
-from stable_baselines3.ppo import CnnPolicy, MlpPolicy
 
+from custom_env_utils import par_env_with_seed
 from sim_steps import sim_steps
 
 
-def action_difference(sequence1, actions_list2):
+def action_difference(sequence1, *actions_list2):
     # Extract values associated with the key "action" from both lists
-    actions_list1 = [val["action"] for val in sequence1]
-
+    actions_list1 = np.array([val["action"] for val in sequence1]).flatten()
     # Initialize a counter for differing values
-    count_differences = 0
 
-    # Iterate over the lengths of both lists, assuming they are the same length
-    for i in range(len(actions_list1)):
-        for j in range(len(actions_list1[i])):
-            if actions_list1[i][j] != np.floor(actions_list2[i][j]):
-                count_differences -= 1
-    return count_differences
+    actions_list2 = np.floor(actions_list2)
+    differences = np.sum(actions_list1 != actions_list2)
+    return differences
 
 
-def reward_difference(env, sequence1, chosen_actions):
+def reward_difference(env, sequence1, *chosen_actions):
     # Extract values associated with the key "action" from both lists
     rewards_list1 = [val["reward"] for val in sequence1]
-    chosen_actions = np.floor(chosen_actions)
+    chosen_actions = [int(a) for a in chosen_actions]
 
+    chosen_actions = np.reshape(
+        chosen_actions, shape=(len(sequence1), len(rewards_list1[0]))
+    )
+    chosen_actions = np.clip(chosen_actions, min=0, max=4)
     sequence2 = sim_steps(
         env,
         None,
@@ -54,14 +52,19 @@ def reward_difference(env, sequence1, chosen_actions):
 
 
 def counterfactuals(env, sequence: List[Dict]):
-    action_objective = partial(action_difference, sequence1=sequence)
-    reward_objective = partial(reward_difference, sequence1=sequence)
-    Problem(
+    action_objective = partial(action_difference, sequence)
+    reward_objective = partial(reward_difference, env, sequence)
+
+    problem = Problem(
         [action_objective, reward_objective],
         len(sequence) * len(sequence[0]["action"]),
-        [(0, 6)],
+        [(0, 5)],
         same_range=True,
     )
+
+    evolution = Evolution(problem)
+
+    print(evolution.evolve())
 
 
 if __name__ == "__main__":
@@ -109,6 +112,7 @@ if __name__ == "__main__":
         exit(0)
 
     env = env_fn.parallel_env(**env_kwargs)
+    env = par_env_with_seed(env, 42)
 
     try:
         latest_policy = max(

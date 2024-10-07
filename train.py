@@ -55,7 +55,8 @@ if __name__ == "__main__":
         f"Using learning rate: {lr:.6f}, discount factor: {gamma:.3f}, TD parameter: {la:.3f}"
     )
     checkpoint_callback = CheckpointCallback(
-        save_freq=1e3, save_path=f"{str(env_fn.env(**env_kwargs).metadata['name'])}/"
+        save_freq=int(1e3),
+        save_path=f"{str(env_fn.env(**env_kwargs).metadata['name'])}/",
     )
 
     train(

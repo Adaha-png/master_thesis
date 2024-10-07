@@ -8,7 +8,7 @@ import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
-from stable_baselines3.ppo import CnnPolicy, MlpPolicy
+from stable_baselines3.ppo import MlpPolicy
 
 
 def train(
