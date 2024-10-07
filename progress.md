@@ -32,14 +32,23 @@ Argaparse to set environment, timesteps and tuning paramenters from terminal
 
 ## Week 40
 ### Fixed eval function
+
 * one agent acted randomly
+
 * evaluated as aec instead of parallel
 
 ### Counterfactual sequences
-* action diff objective done
-* reward objective almost done
-* Problem object made
+
+* objective functions made (rewards and action)
+
+* Problem and Evolution objects made, evolution runs
+
+### utils
+
+* added a utils file, currently contains a function to add a seed to a pettingzoo parallelenv
 
 # TODO
-* make sim\_steps accept seed, slight changes to ss need to be made.
-* make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
+
+* [x]make sim\_steps accept seed, slight changes to ss need to be made.
+
+* [ ]make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
