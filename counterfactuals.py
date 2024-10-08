@@ -4,6 +4,7 @@ import os
 from functools import partial
 from typing import Dict, List
 
+import matplotlib.pyplot as plt
 import numpy as np
 import supersuit as ss
 from nsga2.evolution import Evolution
@@ -63,18 +64,34 @@ def counterfactuals(env, sequence: List[Dict]):
         same_range=True,
     )
 
-    evolution = Evolution(problem, num_of_generations=1000)
+    evolution = Evolution(
+        problem,
+        num_of_generations=2,
+        num_of_individuals=400,
+        num_of_tour_particips=3,
+        tournament_prob=0.85,
+    )
 
-    individuals = evolution.evolve()
+    individuals = np.array(evolution.evolve())
+    ind_plotting = np.array(
+        [
+            [action_objective(*i.features), reward_objective(*i.features)]
+            for i in individuals
+        ]
+    )
 
-    best_fit = -np.inf
-    best_actions = None
-    for i in individuals:
-        actions = i.features
-        if reward_objective(*actions) + action_objective(*actions) > best_fit:
-            best_fit = reward_objective(*actions) + action_objective(*actions)
-            best_actions = actions
-    print(reward_objective(*best_actions), action_objective(*best_actions))
+    # Plotting the points
+    plt.scatter(
+        ind_plotting[:, 0],
+        ind_plotting[:, 1],
+        color="red",
+        label="Pareto Optimal Points",
+    )
+    plt.xlabel("Reward change")
+    plt.ylabel("Action change")
+    plt.legend()
+    plt.title("Pareto Optimal Set")
+    plt.savefig("tex/images/best_counterfactuals.pdf")
 
 
 if __name__ == "__main__":
