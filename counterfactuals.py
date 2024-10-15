@@ -151,8 +151,8 @@ def counterfactuals_with_model(env, sequence, policy):
 
     evolution = Evolution(
         problem,
-        num_of_generations=3,
-        num_of_individuals=20,
+        num_of_generations=100,
+        num_of_individuals=1000,
         num_of_tour_particips=2,
         tournament_prob=0.9,
     )
