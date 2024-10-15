@@ -1,4 +1,6 @@
 \documentclass[UKenglish]{uiomasterthesis}
+\usepackage{algpseudocode}
+\usepackage{algorithm}
 \usepackage{graphicx} % Required for inserting images
 \usepackage[UKenglish]{uiomasterfp}
 \usepackage[nottoc]{tocbibind}
@@ -94,7 +96,7 @@ Another, and perhaps more important, use case is safety. If when online, i.e. th
 \medskip
 
 \subsection{Definition of intent}
-We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We define these sets of trajectories, along with their probabilities believed by a certain agent $A$, as the intent of the agent. The agent $A_0$ only has information about $a_0$ in the set $\textbf{a}$.
+We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual tracjectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to recieve the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
 
 How do we separate intent of 1 one and agent 2
 
@@ -138,6 +140,7 @@ We could however potentially change the implementation so it considers the tempo
 
 
 \subsection{ ACTER: Diverse and Actionable Counterfactual\\ Sequences for Explaining and Diagnosing RL Policies}
+\label{sec:acter}
 The paper presents ACTER, an algorithm that uses counterfactual sequences with actionable advice on how to avoid failure for an RL policy. It does this by using an evolutionary algorithm (EA) known as NSGA-II to generate counterfactual sequences that don't lead to failure as close as possible to factual sequences that lead to failure. This paper presents counterfactual sequences and not just actions, which means it also presents how to avoid the state that lead to failure to begin with, which should, if ACTER is implemented correctly, allow us to significantly reduce the amount of times our policy fails. It also offers multiple counterfactuals to allow the end user to decide which counterfactual is preferable to their use case.
 
 There are 4 hypothesises tested by the paper. The last two considers laymen users and are therefore not as interesting to us. The first two however "ACTER can produce counterfactual sequences that prevent failure with lower effort and higher certainty in stochastic environments compared to the baselines." and "ACTER can produce a set of counterfactual sequences that offer more diverse ways of preventing failure compared to the baselines." are partially and fully confirmed respectively. Which means ACTER will likely be a useful tool to explain and diagnose our RL policy.
@@ -145,6 +148,62 @@ There are 4 hypothesises tested by the paper. The last two considers laymen user
 
 \medskip
 \chapter{Methodology}
+
+\section{Counterfactual sequences for action importance}
+\label{sec:counterfactual}
+To discover counterfactual sequences we use the EA known as NSGA-II (Non dominated Sorting Genetic Algorithm II). This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. See figure \ref{"fig:pareto"}
+
+\begin{algorithm}
+\caption{Fast Non-Dominated Sort}
+\label{alg:fnds}
+\begin{algorithmic}
+    \State $F_i \gets \emptyset$
+    \ForAll{$p \in P$}
+    \State $S_p \gets \emptyset$
+    \State $n_p \gets 0$
+        \ForAll{$q \in P$}
+            \If{$p \prec q$}
+                \State $S_p \gets S_p \cup q$
+            \ElsIf{$q \prec p$}
+                \State $n_p \gets n_p + 1$
+            \EndIf
+        \EndFor
+        \If{$n_p == 0$}
+            \State $F_1 \gets F_1 \cup p$
+            \State $p_{rank} \gets 1$
+        \EndIf
+    \EndFor
+    \State $i \gets 1$
+    \While{$F_i \neq \emptyset$}
+        \State $Q \gets \emptyset$
+        \ForAll{$p \in F_i$} 
+            \ForAll{$q \in S_p$}
+                \State $n_q \gets n_q - 1$
+                \If{$n_q \gets 0$}
+                    \State $q_{rank} \gets i + 1$
+                    \State $Q \gets Q \cup q$
+                \EndIf
+            \EndFor
+        \EndFor
+        \State $i \gets i + 1$
+        \State $F_i \gets Q$
+    \EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{figure}[!ht]
+	\includegraphics[width=\columnwidth]{images/best_counterfactuals.pdf}
+	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with NSGA-II}
+	\label{fig:pareto} 
+\end{figure}
+
+\begin{figure}[!ht]
+	\includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
+	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with NSGA-II}
+	\label{fig:pareto} 
+\end{figure}
+
 \section{--IPPO vs MAPPO}
 Using IPPO for now because \cite{dewitt2020independentlearningneedstarcraft}. Should be enough for explainability.
 

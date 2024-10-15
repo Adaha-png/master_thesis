@@ -1,6 +1,7 @@
 import argparse
 import glob
 import os
+from copy import deepcopy
 from functools import partial
 from typing import Dict, List
 
@@ -13,7 +14,7 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 
 from custom_env_utils import par_env_with_seed
-from sim_steps import sim_steps
+from sim_steps import sim_steps, sim_steps_partial
 
 
 def action_difference(sequence1, *actions_list2):
@@ -50,7 +51,7 @@ def reward_difference(env, sequence1, *chosen_actions):
     for i in range(len(rewards_list1)):
         for j in range(len(rewards_list1[i])):
             diff += rewards_list1[i][j] - rewards_list2[i][j]
-    return diff
+    return -diff
 
 
 def counterfactuals(env, sequence: List[Dict]):
@@ -60,7 +61,7 @@ def counterfactuals(env, sequence: List[Dict]):
     problem = Problem(
         [action_objective, reward_objective],
         len(sequence) * len(sequence[0]["action"]),
-        [(0, 5)],
+        [(0, env.action_space.n)],
         same_range=True,
     )
 
@@ -68,14 +69,14 @@ def counterfactuals(env, sequence: List[Dict]):
         problem,
         num_of_generations=2,
         num_of_individuals=400,
-        num_of_tour_particips=3,
+        num_of_tour_particips=4,
         tournament_prob=0.85,
     )
 
     individuals = np.array(evolution.evolve())
     ind_plotting = np.array(
         [
-            [action_objective(*i.features), reward_objective(*i.features)]
+            [-action_objective(*i.features), reward_objective(*i.features)]
             for i in individuals
         ]
     )
@@ -87,11 +88,97 @@ def counterfactuals(env, sequence: List[Dict]):
         color="red",
         label="Pareto Optimal Points",
     )
-    plt.xlabel("Reward change")
-    plt.ylabel("Action change")
+    plt.xlabel("Action change")
+    plt.ylabel("Reward change")
+    plt.gca().invert_xaxis()
     plt.legend()
     plt.title("Pareto Optimal Set")
     plt.savefig("tex/images/best_counterfactuals.pdf")
+
+
+def reward_difference_with_model(env, policy, sequence1, *chosen_actions):
+    if sum(np.array(chosen_actions) >= 0) - 1 == 0:
+        return 0
+    index = min(int(list(chosen_actions).pop(0)), len(sequence1) - 1)
+    # Extract values associated with the key "action" from both lists
+    rewards_list1 = [val["reward"] for val in sequence1]
+
+    sequence2 = deepcopy(sequence1[0 : index + 1])
+
+    sequence2[index]["action"] = [
+        int(chosen_actions[i])
+        if chosen_actions[i] >= 0
+        else sequence1[index]["action"][i - 1]
+        for i in range(1, len(chosen_actions))
+    ]
+    sequence2[index]["action"] = np.clip(
+        sequence2[index]["action"],
+        a_min=0,
+        a_max=env.action_space.n - 1,
+    )
+
+    sequence2 = sim_steps_partial(
+        env,
+        policy,
+        sequence2,
+        num_steps=len(sequence1),
+    )
+
+    rewards_list2 = [val["reward"] for val in sequence2]
+
+    diff = 0
+    for i in range(len(rewards_list1)):
+        for j in range(len(rewards_list1[i])):
+            diff += rewards_list1[i][j] - rewards_list2[i][j]
+    return -diff
+
+
+def action_difference_with_model(*actions):
+    return sum(np.array(actions) >= 0) - 1
+
+
+def counterfactuals_with_model(env, sequence, policy):
+    acts = env.action_space.n
+
+    reward_objective = partial(reward_difference_with_model, env, policy, sequence)
+    action_objective = partial(action_difference_with_model)
+
+    problem = Problem(
+        [action_objective, reward_objective],
+        1 + len(sequence[0]["action"]),
+        [(0, len(sequence))] + [(-1, acts) for _ in range(len(sequence[0]["action"]))],
+    )
+
+    evolution = Evolution(
+        problem,
+        num_of_generations=3,
+        num_of_individuals=20,
+        num_of_tour_particips=2,
+        tournament_prob=0.9,
+    )
+
+    individuals = np.array(evolution.evolve())
+    ind_plotting = np.array(
+        [
+            [action_objective(*i.features), -reward_objective(*i.features)]
+            for i in individuals
+            if reward_objective(*i.features) != 0
+        ]
+    )
+
+    # Plotting the points
+    plt.scatter(
+        ind_plotting[:, 0],
+        ind_plotting[:, 1],
+        color="red",
+        label="Pareto Optimal Points",
+    )
+    plt.xlabel("Action change")
+    plt.ylabel("Reward change")
+    plt.gca().invert_xaxis()
+    plt.legend()
+    plt.title("Pareto Optimal Set")
+    plt.savefig("tex/images/best_counterfactuals_with_model.pdf")
 
 
 if __name__ == "__main__":
@@ -118,7 +205,7 @@ if __name__ == "__main__":
 
         env_kwargs = dict(
             N=3,
-            local_ratio=0.5,
+            local_ratio=0.0,
             max_cycles=25,
             continuous_actions=False,
         )
@@ -154,5 +241,5 @@ if __name__ == "__main__":
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
-    seq = sim_steps(env, latest_policy, num_steps=10)
-    counterfactuals(env, seq)
+    seq = sim_steps(env, latest_policy, num_steps=20)
+    counterfactuals_with_model(env, seq, latest_policy)

@@ -3,7 +3,6 @@ import glob
 import os
 import pprint
 import random
-from types import MethodType
 
 import numpy as np
 import supersuit as ss
@@ -14,31 +13,52 @@ from stable_baselines3 import PPO
 from custom_env_utils import par_env_with_seed
 
 
-def par_env_with_seed(env, seed):
-    # pettingzoo/gymnasium/supersuit compatibility, use this function if you want seeded env
-    def custom_reset(self, seed=None, options=None):
-        if self._seed is not None:
-            seed = self._seed
+def sim_steps_partial(env, policy, seq, num_steps=20):
+    model = PPO.load(policy)
 
-        self.aec_env.reset(seed=seed, options=options)
-        self.agents = self.aec_env.agents[:]
-        observations = {
-            agent: self.aec_env.observe(agent)
-            for agent in self.aec_env.agents
-            if not (self.aec_env.terminations[agent] or self.aec_env.truncations[agent])
+    obs = env.reset()
+    rollout = []
+    for step in seq:
+        step_dict = {
+            "observation": obs,
         }
 
-        infos = dict(**self.aec_env.infos)
-        return observations, infos
+        act = step["action"]
 
-    def set_seed(self, seed):
-        self._seed = seed
+        obs, reward, termination, info = env.step(act)
 
-    env.seed = MethodType(set_seed, env)
-    env.reset = MethodType(custom_reset, env)
-    env.seed(seed)
+        step_dict.update(
+            {
+                "reward": reward,
+                "action": act,
+            }
+        )
 
-    return env
+        rollout.append(step_dict)
+
+        if termination.all():
+            break
+
+    for i in range(len(seq), num_steps):
+        step_dict = {
+            "observation": obs,
+        }
+
+        act = model.predict(obs, deterministic=True)[0]
+
+        obs, reward, termination, info = env.step(act)
+
+        step_dict.update(
+            {
+                "reward": reward,
+                "action": act,
+            }
+        )
+
+        rollout.append(step_dict)
+
+    env.close()
+    return rollout
 
 
 def sim_steps(
@@ -61,7 +81,6 @@ def sim_steps(
             act = model.predict(obs, deterministic=True)[0]
         else:
             act = chosen_actions[step]
-
         obs, reward, termination, info = env.step(act)
 
         step_dict.update(
