@@ -9,6 +9,11 @@
 * To avoid reward instead of penalty
 * Multi agent
 
+## More on shapley
+
+* not intended for temporal
+
+
 # Worklog
 ## Week 39
 ### New env, simple spread
@@ -39,6 +44,8 @@ Argaparse to set environment, timesteps and tuning paramenters from terminal
 
 ### Counterfactual sequences
 
+Using sequences for action importance gives a temporal aspect
+
 * objective functions made (rewards and action)
 
 * Problem and Evolution objects made, evolution runs
@@ -47,8 +54,48 @@ Argaparse to set environment, timesteps and tuning paramenters from terminal
 
 * added a utils file, currently contains a function to add a seed to a pettingzoo parallelenv
 
+## week 41
+### Counterfactual sequences w model
+
+With this new model we only change one timestep directly and then let the policy dictate the environment after. We can use this to find consequences for actions. something something intent
+
+* new method to look for biggest reward change with only changing actions in a single timestep
+
+* pareto optimal points for amount of actions changed
+
+* implemented for discrete, but not functional yet
+
+## week 42
+
+* fixed issues from week 41
+
+
 # TODO
 
-* [x]make sim\_steps accept seed, slight changes to ss need to be made.
+## sim\_steps
 
-* [ ]make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
+* [x] make sim\_steps accept seed
+
+* [ ] make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
+
+* [ ] work with continous action space
+
+## feature importance for found actions
+
+* [ ] feature permutation
+
+* [ ] surragate shap and others
+
+## major changes
+
+* environment reset function overhaul
+
+* supersuit reward fix, doesnt respect local reward
+
+## sparse rewards
+
+* new methods for action importance in sparse reward environments
+
+## misc
+
+* try different architectures
