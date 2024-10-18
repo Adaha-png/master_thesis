@@ -151,34 +151,36 @@ def counterfactuals_with_model(env, sequence, policy):
 
     evolution = Evolution(
         problem,
-        num_of_generations=100,
-        num_of_individuals=1000,
+        num_of_generations=10,
+        num_of_individuals=10,
         num_of_tour_particips=2,
         tournament_prob=0.9,
     )
 
     individuals = np.array(evolution.evolve())
-    ind_plotting = np.array(
-        [
-            [action_objective(*i.features), -reward_objective(*i.features)]
-            for i in individuals
-            if reward_objective(*i.features) != 0
-        ]
-    )
-
-    # Plotting the points
-    plt.scatter(
-        ind_plotting[:, 0],
-        ind_plotting[:, 1],
-        color="red",
-        label="Pareto Optimal Points",
-    )
-    plt.xlabel("Action change")
-    plt.ylabel("Reward change")
-    plt.gca().invert_xaxis()
-    plt.legend()
-    plt.title("Pareto Optimal Set")
-    plt.savefig("tex/images/best_counterfactuals_with_model.pdf")
+    # ind_plotting = np.array(
+    #     [
+    #         [action_objective(*i.features), -reward_objective(*i.features)]
+    #         for i in individuals
+    #         if reward_objective(*i.features) != 0
+    #     ]
+    # )
+    #
+    # # Plotting the points
+    # plt.scatter(
+    #     ind_plotting[:, 0],
+    #     ind_plotting[:, 1],
+    #     color="red",
+    #     label="Pareto Optimal Points",
+    # )
+    # plt.xlabel("Action change")
+    # plt.ylabel("Reward change")
+    # plt.gca().invert_xaxis()
+    # plt.legend()
+    # plt.title("Pareto Optimal Set")
+    # plt.savefig("tex/images/best_counterfactuals_with_model.pdf")
+    #
+    return [i.features[0] for i in individuals]
 
 
 if __name__ == "__main__":
@@ -242,4 +244,4 @@ if __name__ == "__main__":
     env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
     seq = sim_steps(env, latest_policy, num_steps=20)
-    counterfactuals_with_model(env, seq, latest_policy)
+    print(counterfactuals_with_model(env, seq, latest_policy))

@@ -201,14 +201,27 @@ To discover counterfactual sequences we use the EA known as NSGA-II (Non dominat
 \begin{figure}[!ht]
 	\includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
 	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with NSGA-II}
-	\label{fig:pareto} 
+	\label{fig:pareto_model} 
 \end{figure}
 
+\section{Shapley values for joint feature importance}
+
+\begin{figure}[!ht]
+	\includegraphics[width=\columnwidth]{images/shap_plot_surrogate.pdf}
+	\caption{Shapley values for a random forest surrogate model}
+	\label{fig:shap} 
+\end{figure}
+
+\begin{figure}[!ht]
+	\includegraphics[width=\columnwidth]{images/shap_plot_kernel.pdf}
+	\caption{Shapley values for the kernel model}
+	\label{fig:shap} 
+\end{figure}
 \section{--IPPO vs MAPPO}
 Using IPPO for now because \cite{dewitt2020independentlearningneedstarcraft}. Should be enough for explainability.
 
 \section{--Formally define intent}
-Intent vs. goal?
+Intent vs. Goal?
 
 We define the intent of an agent as the short term goal.
 

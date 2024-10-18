@@ -69,6 +69,9 @@ With this new model we only change one timestep directly and then let the policy
 
 * fixed issues from week 41
 
+* started implemented random forest surrogate model shapley
+
+* implemented kernel shapley, needs more work
 
 # TODO
 
@@ -82,15 +85,15 @@ With this new model we only change one timestep directly and then let the policy
 
 ## feature importance for found actions
 
-* [ ] feature permutation
+* [?] surragate shap
 
-* [ ] surragate shap and others
+* [?] kernel shap
 
 ## major changes
 
 * environment reset function overhaul
 
-* supersuit reward fix, doesnt respect local reward
+* ~~supersuit reward fix, doesnt respect local reward~~ *nvm, it works*
 
 ## sparse rewards
 
@@ -98,4 +101,4 @@ With this new model we only change one timestep directly and then let the policy
 
 ## misc
 
-* try different architectures
+* try different model architectures
