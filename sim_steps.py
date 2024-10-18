@@ -26,16 +26,13 @@ def sim_steps_partial(env, policy, seq, num_steps=20):
         act = step["action"]
 
         obs, reward, termination, info = env.step(act)
-
         step_dict.update(
             {
                 "reward": reward,
                 "action": act,
             }
         )
-
         rollout.append(step_dict)
-
         if termination.all():
             break
 
@@ -43,11 +40,8 @@ def sim_steps_partial(env, policy, seq, num_steps=20):
         step_dict = {
             "observation": obs,
         }
-
         act = model.predict(obs, deterministic=True)[0]
-
         obs, reward, termination, info = env.step(act)
-
         step_dict.update(
             {
                 "reward": reward,
