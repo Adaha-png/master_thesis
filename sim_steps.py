@@ -1,5 +1,6 @@
 import argparse
 import glob
+import inspect
 import os
 import pprint
 import random
@@ -13,9 +14,16 @@ from stable_baselines3 import PPO
 from custom_env_utils import par_env_with_seed
 
 
-def sim_steps_partial(env, policy, seq, num_steps=20):
+def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
     model = PPO.load(policy)
-
+    if seed:
+        env = par_env_with_seed(env, seed)
+    else:
+        print(
+            f"The method {inspect.stack()[0][3]}, called by {inspect.stack()[1][3]} requires a seed"
+        )
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
     obs = env.reset()
     rollout = []
     for step in seq:
@@ -36,7 +44,7 @@ def sim_steps_partial(env, policy, seq, num_steps=20):
         if termination.all():
             break
 
-    for i in range(len(seq), num_steps):
+    for _ in range(len(seq), num_steps):
         step_dict = {
             "observation": obs,
         }
@@ -55,14 +63,24 @@ def sim_steps_partial(env, policy, seq, num_steps=20):
     return rollout
 
 
-def sim_steps(
-    env,
-    policy,
-    chosen_actions=None,
-    num_steps=20,
-):
+def sim_steps(env, policy, chosen_actions=None, num_steps=20, seed=None):
+    env = par_env_with_seed(env, seed)
+
     if chosen_actions is None:
         model = PPO.load(policy)
+
+    if seed:
+        env = par_env_with_seed(env, seed)
+
+    else:
+        print(
+            f"The method {inspect.stack()[0][3]}, called by {inspect.stack()[1][3]} requires a seed."
+        )
+        exit(0)
+
+    env = ss.black_death_v3(env)
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
     obs = env.reset()
     rollout = []
@@ -161,9 +179,6 @@ if __name__ == "__main__":
     except ValueError:
         print("Policy not found.")
         exit(0)
-
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
 
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(sim_steps(env, latest_policy, num_steps=args.steps))
