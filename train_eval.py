@@ -10,6 +10,8 @@ from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 
+from custom_env_utils import par_env_with_seed
+
 
 def train(
     env_fn,
@@ -26,12 +28,11 @@ def train(
 ):
     # Train a single model to play as each agent in an AEC environment
     env = env_fn.parallel_env(**env_kwargs)
-
     # Add black death wrapper so the number of agents stays constant
     # MarkovVectorEnv does not support environments with varying numbers of active agents unless black_death is set to True
     env = ss.black_death_v3(env)
 
-    env.reset(seed=seed)
+    env.reset()
 
     print(f"Starting training on {str(env.metadata['name'])}.")
 
@@ -114,6 +115,8 @@ def eval(
     episode_rewards = []
     agent_reward = np.zeros(num_agents)
     for i in range(num_games):
+        if seed:
+            env = par_env_with_seed(env, seed)
         obs = env.reset()
         done = False
         episode_reward = 0

@@ -96,9 +96,12 @@ def counterfactuals(env, sequence: List[Dict]):
     plt.savefig("tex/images/best_counterfactuals.pdf")
 
 
-def reward_difference_with_model(env, policy, sequence1, *chosen_actions):
+def reward_difference_with_model(
+    env, policy, sequence1, n_actions, seed, *chosen_actions
+):
     if sum(np.array(chosen_actions) >= 0) - 1 == 0:
         return 0
+
     index = min(int(list(chosen_actions).pop(0)), len(sequence1) - 1)
     # Extract values associated with the key "action" from both lists
     rewards_list1 = [val["reward"] for val in sequence1]
@@ -114,13 +117,14 @@ def reward_difference_with_model(env, policy, sequence1, *chosen_actions):
     sequence2[index]["action"] = np.clip(
         sequence2[index]["action"],
         a_min=0,
-        a_max=env.action_space.n - 1,
+        a_max=n_actions - 1,
     )
 
     sequence2 = sim_steps_partial(
         env,
         policy,
         sequence2,
+        seed=seed,
         num_steps=len(sequence1),
     )
 
@@ -137,11 +141,18 @@ def action_difference_with_model(*actions):
     return sum(np.array(actions) >= 0) - 1
 
 
-def counterfactuals_with_model(env, sequence, policy):
-    acts = env.action_space.n
-
+def counterfactuals_with_model(env, sequence, policy, seed):
     reward_objective = partial(reward_difference_with_model, env, policy, sequence)
     action_objective = partial(action_difference_with_model)
+
+    env = par_env_with_seed(env, seed)
+    env = ss.black_death_v3(env)
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
+
+    acts = env.action_space.n
+
+    reward_objective = partial(reward_objective, acts, seed)
 
     problem = Problem(
         [action_objective, reward_objective],
@@ -184,6 +195,7 @@ def counterfactuals_with_model(env, sequence, policy):
 
 
 if __name__ == "__main__":
+    seed = 10
     parser = argparse.ArgumentParser(description="Simulation")
     parser.add_argument(
         "-e",
@@ -228,7 +240,6 @@ if __name__ == "__main__":
         exit(0)
 
     env = env_fn.parallel_env(**env_kwargs)
-    env = par_env_with_seed(env, 42)
 
     try:
         latest_policy = max(
@@ -240,8 +251,5 @@ if __name__ == "__main__":
         print("Policy not found.")
         exit(0)
 
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
-
-    seq = sim_steps(env, latest_policy, num_steps=20)
-    print(counterfactuals_with_model(env, seq, latest_policy))
+    seq = sim_steps(env, latest_policy, num_steps=20, seed=seed)
+    print(counterfactuals_with_model(env, seq, latest_policy, seed))

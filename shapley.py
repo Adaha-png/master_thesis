@@ -8,7 +8,6 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
-import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from sklearn.ensemble import RandomForestClassifier
@@ -16,81 +15,70 @@ from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from tqdm import tqdm
 
-from custom_env_utils import par_env_with_seed
 from sim_steps import sim_steps
 
-
-def surrogate_shap(env, policy, seed=None):
-    X, y = get_data(env, policy)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=seed
-    )
-    model = RandomForestClassifier(n_estimators=100, random_state=seed)
-    model.fit(X_train, y_train)
-
-    # Ensure your model achieves a reasonable performance
-    print(f"Model Accuracy: {model.score(X_test, y_test):.2f}")
-
-    explainer = shap.TreeExplainer(model)
-
-    shap_values = explainer.shap_values(X_test)
-    plt.figure()
-    shap.summary_plot(
-        shap_values,
-        X_test,
-        show=False,
-    )  # Use the SHAP values for class 0
-    plt.savefig(f"tex/images/shap_plot_surrogate.pdf", bbox_inches="tight")
-    plt.close()
-
-
-def pred(model, obs):
-    return model.predict(obs)[0]
+# def surrogate_shap(env, policy, seed=None):
+#     X, y = get_data(env, policy, seed=seed)
+#
+#     X_train, X_test, y_train, y_test = train_test_split(
+#         X, y, test_size=0.2, random_state=seed
+#     )
+#     model = RandomForestClassifier(n_estimators=100, random_state=seed)
+#     model.fit(X_train, y_train)
+#
+#     # Ensure your model achieves a reasonable performance
+#     print(f"Model Accuracy: {model.score(X_test, y_test):.2f}")
+#
+#     explainer = shap.TreeExplainer(model)
+#
+#     shap_values = explainer.shap_values(X_test)
+#     plt.figure()
+#     shap.summary_plot(
+#         shap_values,
+#         X_test,
+#         show=False,
+#     )
+#     plt.savefig(f"tex/images/shap_plot_surrogate.pdf", bbox_inches="tight")
+#     plt.close()
+#
 
 
-def kernel_shap(env, policy):
-    X, _ = get_data(env, policy, total_steps=10000)
+def pred(model, act, obs):
+    return model.predict(obs)[0] == act
+
+
+def kernel_shap(env, policy, act_dict, feature_names=None, seed=None):
+    X, _ = get_data(env, policy, total_steps=1000, seed=seed)
     model = PPO.load(policy)
-    explainer = shap.KernelExplainer(partial(pred, model), shap.kmeans(X, 10))
+    action = 1
+    explainer = shap.KernelExplainer(partial(pred, model, action), shap.kmeans(X, 10))
 
-    shap_values = explainer.shap_values(X)
+    shap_values = explainer.shap_values(X[:1])
     plt.figure()
+
     shap.summary_plot(
-        shap_values,
+        shap_values[:1],
         X,
-        feature_names=[
-            "self vel x",
-            "self vel y",
-            "self pos x",
-            "self pos y",
-            "landmark1 pos x",
-            "landmark1 pos y",
-            "landmark2 pos x",
-            "landmark2 pos y",
-            "landmark3 pos x",
-            "landmark3 pos y",
-            "agent1 pos x",
-            "agent1 pos y",
-            "agent2 pos x",
-            "agent2 pos y",
-            "comm",
-            "comm",
-            "comm",
-            "comm",
-        ],
-        show=False,
+        feature_names=feature_names,
     )
-    plt.savefig(f"tex/images/shap_plot_kernel.pdf", bbox_inches="tight")
+    plt.savefig(
+        f"tex/images/shap_plot_kernel_{act_dict[action]}.pdf", bbox_inches="tight"
+    )
     plt.close()
 
 
-def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1):
+def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=None):
     observations = []
     actions = []
     num_cycles = total_steps // steps_per_cycle
-    for _ in tqdm(range(num_cycles)):
-        step_results = sim_steps(env, policy, num_steps=steps_per_cycle)
+    for i in tqdm(range(num_cycles)):
+        if seed:
+            step_results = sim_steps(
+                env, policy, num_steps=steps_per_cycle, seed=seed + i + 200
+            )
+        else:
+            step_results = sim_steps(env, policy, num_steps=steps_per_cycle)
+
         for entry in step_results:
             obs = entry.get("observation")
             act = entry.get("action")
@@ -139,6 +127,34 @@ if __name__ == "__main__":
             max_cycles=25,
             continuous_actions=False,
         )
+
+        feature_names = [
+            "vel x",
+            "vel y",
+            "pos x",
+            "pos y",
+            "landmark 1 x",
+            "landmark 1 y",
+            "landmark 2 x",
+            "landmark 2 y",
+            "landmark 3 x",
+            "landmark 3 y",
+            "agent 2 x",
+            "agent 2 y",
+            "agent 3 x",
+            "agent 3 y",
+            "comms",
+            "comms",
+            "comms",
+            "comms",
+        ]
+        act_dict = {
+            0: "no action",
+            1: "move left",
+            2: "move right",
+            3: "move down",
+            4: "move up",
+        }
     elif args.env == "kaz":
         env_fn = knights_archers_zombies_v10
 
@@ -151,15 +167,13 @@ if __name__ == "__main__":
             max_cycles=900,
             vector_state=True,
         )
+        feature_names = None
+        act_dict = None
     else:
         print("Invalid env entered")
         exit(0)
 
     env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
-
-    env = par_env_with_seed(env, seed)
-
-    env = ss.black_death_v3(env)
     try:
         latest_policy = max(
             glob.glob(str(env.metadata["name"]) + "/*.zip"),
@@ -170,8 +184,13 @@ if __name__ == "__main__":
         print("Policy not found.")
         exit(0)
 
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
-
     pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(kernel_shap(env, latest_policy))
+    pp.pprint(
+        kernel_shap(
+            env,
+            latest_policy,
+            act_dict,
+            feature_names=feature_names,
+            seed=seed,
+        )
+    )
