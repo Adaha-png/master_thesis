@@ -191,6 +191,8 @@ if __name__ == "__main__":
         kernel_explainer(
             env,
             latest_policy,
+            0,
+            0,
             seed=seed,
         )
     )
