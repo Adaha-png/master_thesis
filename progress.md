@@ -73,6 +73,13 @@ With this new model we only change one timestep directly and then let the policy
 
 * implemented kernel shapley, needs more work
 
+
+## week 43
+
+* explainer\_step file for shapley api
+
+* now possible to use kernelexplainer to make explanations for important actions in critical states.
+
 # TODO
 
 ## sim\_steps
@@ -87,7 +94,7 @@ With this new model we only change one timestep directly and then let the policy
 
 * [?] surragate shap
 
-* [?] kernel shap
+* [x] kernel shap
 
 ## major changes
 
