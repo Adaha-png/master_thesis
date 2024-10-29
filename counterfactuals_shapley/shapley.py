@@ -10,12 +10,11 @@ import numpy as np
 import shap
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
+from sim_steps import sim_steps
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from tqdm import tqdm
-
-from sim_steps import sim_steps
 
 # def surrogate_shap(env, policy, seed=None):
 #     X, y = get_data(env, policy, seed=seed)
@@ -40,30 +39,33 @@ from sim_steps import sim_steps
 #     )
 #     plt.savefig(f"tex/images/shap_plot_surrogate.pdf", bbox_inches="tight")
 #     plt.close()
-#
 
 
 def pred(model, act, obs):
     return model.predict(obs)[0] == act
 
 
-def kernel_shap(env, policy, act_dict, feature_names=None, seed=None):
-    X, _ = get_data(env, policy, total_steps=1000, seed=seed)
+def kernel_explainer(env, policy, agent, action, seed=None):
+    X, _ = get_data(env, policy, agent=agent, total_steps=1000, seed=seed)
     model = PPO.load(policy)
-    action = 1
     explainer = shap.KernelExplainer(partial(pred, model, action), shap.kmeans(X, 10))
+    return explainer
 
-    shap_values = explainer.shap_values(X[:1])
+
+def shap_plot(X, explainer, action_name, feature_names):
+    if len(X.shape) == 1:
+        X = np.expand_dims(X, axis=0)
+    shap_values = explainer.shap_values(X)
     plt.figure()
 
     shap.summary_plot(
-        shap_values[:1],
+        shap_values,
         X,
         feature_names=feature_names,
+        show=False,
     )
-    plt.savefig(
-        f"tex/images/shap_plot_kernel_{act_dict[action]}.pdf", bbox_inches="tight"
-    )
+
+    plt.savefig(f"tex/images/shap_plot_kernel_{action_name}.pdf", bbox_inches="tight")
     plt.close()
 
 
@@ -186,11 +188,9 @@ if __name__ == "__main__":
 
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(
-        kernel_shap(
+        kernel_explainer(
             env,
             latest_policy,
-            act_dict,
-            feature_names=feature_names,
             seed=seed,
         )
     )
