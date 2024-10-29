@@ -12,9 +12,9 @@ from nsga2.evolution import Evolution
 from nsga2.problem import Problem
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
+from sim_steps import sim_steps, sim_steps_partial
 
 from custom_env_utils import par_env_with_seed
-from sim_steps import sim_steps, sim_steps_partial
 
 
 def action_difference(sequence1, *actions_list2):
@@ -172,13 +172,13 @@ def counterfactuals_with_model(env, sequence, policy, seed):
     # ind_plotting = np.array(
     #     [
     #         [action_objective(*i.features), -reward_objective(*i.features)]
-    #         for i in individuals
     #         if reward_objective(*i.features) != 0
     #     ]
     # )
     #
     # # Plotting the points
     # plt.scatter(
+    #         for i in individuals
     #     ind_plotting[:, 0],
     #     ind_plotting[:, 1],
     #     color="red",
@@ -191,7 +191,8 @@ def counterfactuals_with_model(env, sequence, policy, seed):
     # plt.title("Pareto Optimal Set")
     # plt.savefig("tex/images/best_counterfactuals_with_model.pdf")
     #
-    return [i.features[0] for i in individuals]
+    # return [i.features for i in individuals]
+    return individuals
 
 
 if __name__ == "__main__":
@@ -252,4 +253,6 @@ if __name__ == "__main__":
         exit(0)
 
     seq = sim_steps(env, latest_policy, num_steps=20, seed=seed)
-    print(counterfactuals_with_model(env, seq, latest_policy, seed))
+    ind = counterfactuals_with_model(env, seq, latest_policy, seed)
+    relevant_obs = seq[int(ind[0])]["observation"]
+    print(relevant_obs)

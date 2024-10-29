@@ -4,6 +4,7 @@ import inspect
 import os
 import pprint
 import random
+import sys
 
 import numpy as np
 import supersuit as ss
@@ -11,6 +12,7 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from custom_env_utils import par_env_with_seed
 
 
