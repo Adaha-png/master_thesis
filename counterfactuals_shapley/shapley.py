@@ -65,7 +65,10 @@ def shap_plot(X, explainer, action_name, feature_names):
         show=False,
     )
 
-    plt.savefig(f"tex/images/shap_plot_kernel_{action_name}.pdf", bbox_inches="tight")
+    plt.savefig(
+        f"tex/images/shap_plot_kernel_{action_name}.png".replace(" ", "_"),
+        bbox_inches="tight",
+    )
     plt.close()
 
 
