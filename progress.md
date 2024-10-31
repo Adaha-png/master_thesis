@@ -50,6 +50,7 @@ Using sequences for action importance gives a temporal aspect
 
 * Problem and Evolution objects made, evolution runs
 
+
 ### utils
 
 * added a utils file, currently contains a function to add a seed to a pettingzoo parallelenv
@@ -65,6 +66,7 @@ With this new model we only change one timestep directly and then let the policy
 
 * implemented for discrete, but not functional yet
 
+[Actions changed for a single timestep](./tex/images/best_counterfactuals_with_model.pdf)
 ## week 42
 
 * fixed issues from week 41
@@ -79,6 +81,9 @@ With this new model we only change one timestep directly and then let the policy
 * explainer\_step file for shapley api
 
 * now possible to use kernelexplainer to make explanations for important actions in critical states.
+
+[Shapley values for moving up in a critical state in which the agent decided to move up](./tex/images/shap_plot_kernel_move_up.pdf)
+
 
 # TODO
 

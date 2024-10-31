@@ -96,11 +96,7 @@ Another, and perhaps more important, use case is safety. If when online, i.e. th
 \medskip
 
 \subsection{Definition of intent}
-We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual tracjectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to recieve the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
-
-How do we separate intent of 1 one and agent 2
-
-Extract intent from trajectory, start with reward
+We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
 
 
 \section{Relevant methods}
@@ -149,9 +145,12 @@ There are 4 hypothesises tested by the paper. The last two considers laymen user
 \medskip
 \chapter{Methodology}
 
-\section{Counterfactual sequences for action importance}
+\section{Action importance}
+\subsection{Counterfactual sequences}
 \label{sec:counterfactual}
-To discover counterfactual sequences we use the EA known as NSGA-II (Non dominated Sorting Genetic Algorithm II). This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. See figure \ref{"fig:pareto"}
+To discover counterfactual sequences we use the EA known as NSGA-II (Non dominated Sorting Genetic Algorithm II). This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
+We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. See figure \ref{fig:pareto_model}. 
+In the case of continuous actions we instead alter actions in multiple timesteps and use a distance measure that we want to minimize. The reward objective is similar to the case of discrete actions. See figure \ref{fig:pareto}.
 
 \begin{algorithm}
 \caption{Fast Non-Dominated Sort}
@@ -204,13 +203,53 @@ To discover counterfactual sequences we use the EA known as NSGA-II (Non dominat
 	\label{fig:pareto_model} 
 \end{figure}
 
-\section{Shapley values for joint feature importance}
+\section{Feature importance}
+
+\subsection{Shapley values for observations}
+Feature importance is strongest resource we have to explain an action taken by an agent in an environment. Shapley values are a way to disconnect the feature importance from the observation by averages something something. See algorithm \ref{alg:shapley}
 
 \begin{figure}[!ht]
 	\includegraphics[width=\columnwidth]{images/shap_plot_kernel_move_up.pdf}
-	\caption{Shapley values for the kernel model}
+	\caption{Shapley values for moving up in a critical state in which the agent decided to move up}
 	\label{fig:shap} 
 \end{figure}
+
+\begin{algorithm}
+\caption{Shapley Values for Feature Importance in Reinforcement Learning}
+\label{alg:shapley}
+\begin{algorithmic}
+    \State \textbf{Input:} RL policy $\pi_\theta$, set of features $F$
+    \State \textbf{Output:} Shapley values $\phi_f$ for each feature $f \in F$
+    \State $\phi_f \gets 0 \; \forall f \in F$ \Comment{Initialize Shapley values to zero}
+    \State $n \gets |F|$ \Comment{Number of features}
+    
+    \ForAll{$f \in F$}
+        \ForAll{$S \subseteq F \setminus \{f\}$}
+            \State $V_S \gets \texttt{value}(\pi_\theta, S)$ \Comment{Evaluate RL model $\pi_\theta$ with feature set $S$}
+            \State $V_{S \cup \{f\}} \gets \texttt{value}(\pi_\theta, S \cup \{f\})$ \Comment{Evaluate RL model $\pi_\theta$ with feature set $S \cup \{f\}$}
+            
+            \State $\phi_f \gets \phi_f + \frac{|S|!(n - |S| - 1)!}{n!} \left(V_{S \cup \{f\}} - V_S\right)$
+            \Comment{Update Shapley value for feature $f$}
+        \EndFor
+    \EndFor
+    
+    \Function{value}{$\pi_\theta, S$}
+        \State \textbf{Input:} RL model $\pi_\theta$, feature set $S$
+        \State \textbf{Output:} Model performance with feature set $S$
+        
+        \State $\texttt{Train model } \pi_\theta \texttt{ using features in } S$
+        \State $\texttt{Evaluate model } \pi_\theta$
+        \State \Return \texttt{model performance}
+    \EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+
+\section{Extracting intent}
+
+In an environment where the agents successfully reaches a desirable state we can assume that at some point in the trajectory an agents intent is to reach this state. We can train a prediction model on such an environment that uses a certain state or observation as input and outputs features of interest some time in the future. In the example of autonomous vehicles the output could be predicted position of the vehicle at a future point in time. If our prediction model is successful, then it could be considered part of an explanation for the intent of an agent.
+Additionally, we could train different models with different sets of inputs to identify what is important to identify intent. We could for example train one model that takes just the observation as input, one that takes observation and action, and one that takes observation and Shapley values.
+
 
 \section{--IPPO vs MAPPO}
 Using IPPO for now because \cite{dewitt2020independentlearningneedstarcraft}. Should be enough for explainability.
