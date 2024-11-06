@@ -8,6 +8,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
+import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from sim_steps import sim_steps
@@ -42,13 +43,19 @@ from tqdm import tqdm
 
 
 def pred(model, act, obs):
-    return model.predict(obs)[0] == act
+    obs = torch.tensor(obs).unsqueeze(0)
+    vals = torch.softmax(
+        model.policy.action_net(model.policy.mlp_extractor.policy_net(obs)), 2
+    )
+    vals = vals.detach().numpy()[0, :, act]
+    print(vals)
+    return vals
 
 
 def kernel_explainer(env, policy, agent, action, seed=None):
     X, _ = get_data(env, policy, agent=agent, total_steps=1000, seed=seed)
     model = PPO.load(policy)
-    explainer = shap.KernelExplainer(partial(pred, model, action), shap.kmeans(X, 10))
+    explainer = shap.KernelExplainer(partial(pred, model, action), shap.kmeans(X, 100))
     return explainer
 
 
