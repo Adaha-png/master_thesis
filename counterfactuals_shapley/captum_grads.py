@@ -11,13 +11,15 @@ from captum.attr import IntegratedGradients
 from counterfactuals import action_difference_with_model, counterfactuals_with_model
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
+from shapley import get_data
 from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from torch import nn
 
 
-def ig_extract(policy, obs, action, feature_names, act_dict):
+def ig_extract(env, policy, obs, action, agent, feature_names, act_dict):
     model = PPO.load(policy)
+
     net = nn.Sequential(
         *model.policy.mlp_extractor.policy_net,
         model.policy.action_net,
@@ -26,9 +28,15 @@ def ig_extract(policy, obs, action, feature_names, act_dict):
 
     ig = IntegratedGradients(net)
 
+    if not os.path.exists(".baseline.pt"):
+        baseline = create_baseline(env, policy, agent)
+        torch.save(baseline, ".baseline.pt")
+    else:
+        baseline = torch.load(".baseline.pt")
+
     attributions, approximation_error = ig.attribute(
         obs,
-        baselines=torch.zeros(obs.shape),
+        baselines=baseline,
         target=action,
         method="gausslegendre",
         return_convergence_delta=True,
@@ -62,7 +70,16 @@ def ig_extract(policy, obs, action, feature_names, act_dict):
     ax.set_title("Integrated gradients method")
 
     # Show the plot
-    plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
+    plt.show()
+    # plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
+
+
+def create_baseline(env, policy, agent):
+    obs, _ = get_data(
+        env, policy, total_steps=1000, steps_per_cycle=1, agent=agent, seed=1234567
+    )
+    baseline = torch.mean(torch.tensor(obs), dim=0)
+    return baseline
 
 
 if __name__ == "__main__":
@@ -120,10 +137,10 @@ if __name__ == "__main__":
             "agent 2 y",
             "agent 3 x",
             "agent 3 y",
-            "comms",
-            "comms",
-            "comms",
-            "comms",
+            "comms 1",
+            "comms 2",
+            "comms 3",
+            "comms 4",
         ]
         act_dict = {
             0: "no action",
@@ -161,7 +178,7 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    if not os.path.exists("obs_act_ag.pkl"):
+    if not os.path.exists(".obs_act_ag.pkl"):
         seq = sim_steps(env, latest_policy, num_steps=20, seed=seed)
         individuals = counterfactuals_with_model(env, seq, latest_policy, seed)
 
@@ -187,11 +204,11 @@ if __name__ == "__main__":
         }
 
         # Save to a file
-        with open("obs_act_ag.pkl", "wb") as f:
+        with open(".obs_act_ag.pkl", "wb") as f:
             pickle.dump(data_to_save, f)
     else:
         # Load from the file
-        with open("obs_act_ag.pkl", "rb") as f:
+        with open(".obs_act_ag.pkl", "rb") as f:
             loaded_data = pickle.load(f)
 
         # Extracting the saved data
@@ -199,4 +216,12 @@ if __name__ == "__main__":
         relevant_obs = loaded_data["relevant_obs"]
         agent = loaded_data["agent"]
     print(f"{action=}")
-    ig_extract(latest_policy, relevant_obs, action, feature_names, act_dict)
+    ig_extract(
+        env,
+        latest_policy,
+        relevant_obs,
+        action,
+        agent,
+        feature_names,
+        act_dict,
+    )
