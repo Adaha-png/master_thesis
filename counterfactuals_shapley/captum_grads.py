@@ -17,23 +17,24 @@ from stable_baselines3 import PPO
 from torch import nn
 
 
-def ig_extract(env, policy, obs, action, agent, feature_names, act_dict):
+def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device):
     model = PPO.load(policy)
 
     net = nn.Sequential(
         *model.policy.mlp_extractor.policy_net,
         model.policy.action_net,
         nn.Softmax(),
-    )
+    ).to(device)
 
     ig = IntegratedGradients(net)
 
     if not os.path.exists(".baseline.pt"):
-        baseline = create_baseline(env, policy, agent)
+        baseline = create_baseline(env, policy, agent, device)
         torch.save(baseline, ".baseline.pt")
     else:
         baseline = torch.load(".baseline.pt")
 
+    obs.to(device)
     attributions, approximation_error = ig.attribute(
         obs,
         baselines=baseline,
@@ -74,15 +75,16 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict):
     # plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
 
 
-def create_baseline(env, policy, agent):
+def create_baseline(env, policy, agent, device):
     obs, _ = get_data(
         env, policy, total_steps=1000, steps_per_cycle=1, agent=agent, seed=1234567
     )
-    baseline = torch.mean(torch.tensor(obs), dim=0)
-    return baseline
+    baseline = torch.mean(torch.tensor(obs), dim=0).unsqueeze(0)
+    return baseline.to(device)
 
 
 if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed = 42
     # Superseeding, might be unnecessary
     np.random.seed(seed)
@@ -112,6 +114,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
     if args.env == "spread":
         env_fn = simple_spread_v3
 
@@ -217,11 +220,5 @@ if __name__ == "__main__":
         agent = loaded_data["agent"]
     print(f"{action=}")
     ig_extract(
-        env,
-        latest_policy,
-        relevant_obs,
-        action,
-        agent,
-        feature_names,
-        act_dict,
+        env, latest_policy, relevant_obs, action, agent, feature_names, act_dict, device
     )
