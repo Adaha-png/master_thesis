@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>progress</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<h1 id="reading-list">Reading list</h1>
+<h2 id="acter">Acter</h2>
+<h3 id="relevancy">Relevancy</h3>
+<ul>
+<li>Counterfactual sequences</li>
+<li>smallest perturbation to avoid outcome</li>
+</ul>
+<h3 id="difference">Difference</h3>
+<ul>
+<li>To avoid reward instead of penalty</li>
+<li>Multi agent</li>
+</ul>
+<h2 id="more-on-shapley">More on shapley</h2>
+<ul>
+<li>not intended for temporal</li>
+</ul>
+<h1 id="worklog">Worklog</h1>
+<h2 id="week-39">Week 39</h2>
+<h3 id="new-env-simple-spread">New env, simple spread</h3>
+<p>Pros:</p>
+<ul>
+<li><p>Easy to train</p></li>
+<li><p>Clear cooperation, good explanations shouldnt be hard to
+extract</p></li>
+<li><p>Set local/global reward</p></li>
+</ul>
+<p>Cons:</p>
+<ul>
+<li><p>Homogeneous agents</p></li>
+<li><p>Explanations likely arent too useful because cooperation is too
+obvious</p></li>
+</ul>
+<h3 id="command-line-interface">Command line interface</h3>
+<p>Argaparse to set environment, timesteps and tuning paramenters from
+terminal</p>
+<h2 id="week-40">Week 40</h2>
+<h3 id="fixed-eval-function">Fixed eval function</h3>
+<ul>
+<li><p>one agent acted randomly</p></li>
+<li><p>evaluated as aec instead of parallel</p></li>
+</ul>
+<h3 id="counterfactual-sequences">Counterfactual sequences</h3>
+<p>Using sequences for action importance gives a temporal aspect</p>
+<ul>
+<li><p>objective functions made (rewards and action)</p></li>
+<li><p>Problem and Evolution objects made, evolution runs</p></li>
+</ul>
+<h3 id="utils">utils</h3>
+<ul>
+<li>added a utils file, currently contains a function to add a seed to a
+pettingzoo parallelenv</li>
+</ul>
+<h2 id="week-41">week 41</h2>
+<h3 id="counterfactual-sequences-w-model">Counterfactual sequences w
+model</h3>
+<p>With this new model we only change one timestep directly and then let
+the policy dictate the environment after. We can use this to find
+consequences for actions. something something intent</p>
+<ul>
+<li><p>new method to look for biggest reward change with only changing
+actions in a single timestep</p></li>
+<li><p>pareto optimal points for amount of actions changed</p></li>
+<li><p>implemented for discrete, but not functional yet</p></li>
+</ul>
+<h2 id="week-42">week 42</h2>
+<ul>
+<li><p>fixed issues from week 41</p></li>
+<li><p>started implemented random forest surrogate model
+shapley</p></li>
+<li><p>implemented kernel shapley, needs more work</p></li>
+</ul>
+<h2 id="week-43">week 43</h2>
+<ul>
+<li><p>explainer_step file for shapley api</p></li>
+<li><p>now possible to use kernelexplainer to make explanations for
+important actions in critical states.</p></li>
+</ul>
+<p><a href="./tex/images/shap_plot_kernel_move_up.pdf">Shapley values
+for moving up in a critical state in which the agent decided to move
+up</a></p>
+<h1 id="todo">TODO</h1>
+<h2 id="sim_steps">sim_steps</h2>
+<ul class="task-list">
+<li><p><label><input type="checkbox" checked="" />make sim_steps accept
+seed</label></p></li>
+<li><p><label><input type="checkbox" />make sim_steps accept initial
+observation (might need to make an env wrapper, will probably be a lot
+of work)</label></p></li>
+<li><p><label><input type="checkbox" />work with continous action
+space</label></p></li>
+</ul>
+<h2 id="feature-importance-for-found-actions">feature importance for
+found actions</h2>
+<ul>
+<li><p>[?] surragate shap</p></li>
+<li><p><label><input type="checkbox" checked="" />kernel
+shap</label></p></li>
+</ul>
+<h2 id="major-changes">major changes</h2>
+<ul>
+<li><p>environment reset function overhaul</p></li>
+<li><p><del>supersuit reward fix, doesnt respect local reward</del>
+<em>nvm, it works</em></p></li>
+</ul>
+<h2 id="sparse-rewards">sparse rewards</h2>
+<ul>
+<li>new methods for action importance in sparse reward environments</li>
+</ul>
+<h2 id="misc">misc</h2>
+<ul>
+<li>try different model architectures</li>
+</ul>
+</body>
+</html>
