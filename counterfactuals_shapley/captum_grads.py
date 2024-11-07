@@ -34,7 +34,11 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     else:
         baseline = torch.load(".baseline.pt")
 
+    print(f"{baseline=}")
+    print(f"{obs=}")
+
     obs.to(device)
+
     attributions, approximation_error = ig.attribute(
         obs,
         baselines=baseline,
@@ -77,7 +81,7 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
 
 def create_baseline(env, policy, agent, device):
     obs, _ = get_data(
-        env, policy, total_steps=1000, steps_per_cycle=1, agent=agent, seed=1234567
+        env, policy, total_steps=1000, steps_per_cycle=10, agent=agent, seed=1234567
     )
     baseline = torch.mean(torch.tensor(obs), dim=0).unsqueeze(0)
     return baseline.to(device)
