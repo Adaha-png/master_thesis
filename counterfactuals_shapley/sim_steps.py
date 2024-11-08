@@ -65,11 +65,11 @@ def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
     return rollout
 
 
-def sim_steps(env, policy, chosen_actions=None, num_steps=20, seed=None):
+def sim_steps(env, model, chosen_actions=None, num_steps=20, seed=None):
     env = par_env_with_seed(env, seed)
 
-    if chosen_actions is None:
-        model = PPO.load(policy)
+    if chosen_actions is None and type(model) == str:
+        model = PPO.load(model)
 
     if seed:
         env = par_env_with_seed(env, seed)
