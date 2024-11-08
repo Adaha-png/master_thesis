@@ -85,6 +85,21 @@ With this new model we only change one timestep directly and then let the policy
 [Shapley values for moving up in a critical state in which the agent decided to move up](./tex/images/shap_plot_kernel_move_up.pdf)
 
 
+## week 44
+
+no progress
+
+## week 45
+
+Integrated gradients plot
+ * logits dont make sense to explain
+ * one hot encoding isnt differentiable
+ * ergo softmax, additional benefit is a confidence measure of action chosen
+
+Future predictor
+ * takes first observation in a sequence
+ * predicts position of an agent n steps in the future, not yet trained
+
 # TODO
 
 ## sim\_steps

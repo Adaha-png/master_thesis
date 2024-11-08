@@ -32,7 +32,7 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
         baseline = create_baseline(env, policy, agent, device)
         torch.save(baseline, ".baseline.pt")
     else:
-        baseline = torch.load(".baseline.pt")
+        baseline = torch.load(".baseline.pt", map_location=device)
 
     print(f"{baseline=}")
     print(f"{obs=}")
@@ -75,14 +75,14 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     ax.set_title("Integrated gradients method")
 
     # Show the plot
-    plt.show()
-    # plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
+    plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
 
 
 def create_baseline(env, policy, agent, device):
     obs, _ = get_data(
         env, policy, total_steps=1000, steps_per_cycle=10, agent=agent, seed=1234567
     )
+
     baseline = torch.mean(torch.tensor(obs), dim=0).unsqueeze(0)
     return baseline.to(device)
 
@@ -101,13 +101,6 @@ if __name__ == "__main__":
         type=str,
         help="Which environment to use",
         default="spread",
-    )
-    parser.add_argument(
-        "-s",
-        "--steps",
-        type=int,
-        help="Steps to simulate",
-        default=10,
     )
     parser.add_argument(
         "-r",
