@@ -36,7 +36,22 @@ def add_action(X, model):
         pickle.dump(new_X, f)
 
 
-def future_sight(env_name, env_kwargs, policy_path, device, n=10, pretrained=True):
+def one_hot_action(X):
+    num = max(X[:, -1])
+    new_X = np.array([[*obs[:-1], np.eye(num)[obs[-1]]] for obs in X])
+    print(new_X[0:5])
+    return new_X
+
+
+def future_sight(
+    env_name,
+    env_kwargs,
+    policy_path,
+    device,
+    n=10,
+    pretrained=True,
+    with_action="none",
+):
     model = PPO.load(policy_path)
 
     if not os.path.exists(".prediction_data.pkl"):
@@ -49,7 +64,7 @@ def future_sight(env_name, env_kwargs, policy_path, device, n=10, pretrained=Tru
         with open(".prediction_data.pkl", "rb") as f:
             X, y = pickle.load(f)
 
-    if False:
+    if with_action != "none":
         if not os.path.exists(".prediction_data_action.pkl"):
             add_action(X, model)
             with open(".prediction_data_action.pkl", "rb") as f:
@@ -57,6 +72,8 @@ def future_sight(env_name, env_kwargs, policy_path, device, n=10, pretrained=Tru
         else:
             with open(".prediction_data_action.pkl", "rb") as f:
                 X = pickle.load(f)
+        if with_action == "one-hot":
+            X = one_hot_action(X)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -265,4 +282,11 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    future_sight(args.env, env_kwargs, latest_policy, device, pretrained=False)
+    future_sight(
+        args.env,
+        env_kwargs,
+        latest_policy,
+        device,
+        with_action="one-hot",
+        pretrained=False,
+    )
