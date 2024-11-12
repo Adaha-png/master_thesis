@@ -110,7 +110,9 @@ def future_sight(
         epochs=200,
         with_extras=with_extras,
     )
-    torch.save(net.state_dict(), f"pred_model_{with_extras}.pt")
+
+    os.makedirs(".pred_models", exist_ok=True)
+    torch.save(net.state_dict(), f".pred_models/pred_model_{with_extras}.pt")
 
 
 def get_future_data(
