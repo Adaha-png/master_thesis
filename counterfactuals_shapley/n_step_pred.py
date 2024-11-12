@@ -37,9 +37,9 @@ def add_action(X, model):
 
 
 def one_hot_action(X):
-    num = max(X[:, -1])
-    new_X = np.array([[*obs[:-1], np.eye(num)[obs[-1]]] for obs in X])
-    print(new_X[0:5])
+    X = np.array(X)
+    num = round(max(X[:, -1]) - min(X[:, -1]) + 1)
+    new_X = np.array([[*obs[:-1], *np.eye(num)[round(obs[-1])]] for obs in X])
     return new_X
 
 
@@ -79,7 +79,7 @@ def future_sight(
         X, y, test_size=0.2, random_state=42
     )
 
-    if False:
+    if with_action != "none":
         net = nn.Sequential(
             nn.Linear(len(X_train[0]), 64),
             nn.Tanh(),
@@ -101,7 +101,7 @@ def future_sight(
             nn.Linear(64, len(y_train[0])),
         ).to(device)
 
-    train_net(net, X_train, y_train, X_test, y_test, device, epochs=120)
+    train_net(net, X_train, y_train, X_test, y_test, device, epochs=200)
 
 
 def get_future_data(
@@ -147,6 +147,8 @@ def train_net(net, X_train, y_train, X_test, y_test, device, epochs=100, batch_s
     optimizer = torch.optim.AdamW(net.parameters(), lr=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
     # Training loop
+    last_lr = scheduler.get_last_lr()
+    print(f"lr = {last_lr}")
     net.train()
     eval_loss = []
     for epoch in range(epochs):
@@ -173,13 +175,16 @@ def train_net(net, X_train, y_train, X_test, y_test, device, epochs=100, batch_s
         eval_loss.append(test_loss)
         net.train()
         scheduler.step(test_loss)
+        if scheduler.get_last_lr() != last_lr:
+            last_lr = scheduler.get_last_lr()
+            print(f"New lr: {last_lr}")
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}")
 
     plt.plot(range(1, (1 + len(eval_loss)), 1), eval_loss)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
-    plt.savefig("tex/images/pred_model_eval.pdf")
+    plt.savefig("tex/images/pred_model_one_hot.pdf")
 
     # Evaluate on test data
     net.eval()
