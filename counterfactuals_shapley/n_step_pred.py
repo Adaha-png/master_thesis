@@ -19,7 +19,6 @@ from torch import nn
 
 
 def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
-    print(seed)
     env_fn = simple_spread_v3 if env_name == "spread" else knights_archers_zombies_v10
     env = env_fn.parallel_env(**env_kwargs)
     policy = PPO.load(policy_path)
@@ -50,7 +49,7 @@ def future_sight(
     device,
     n=10,
     pretrained=True,
-    with_action="none",
+    with_extras="none",
 ):
     model = PPO.load(policy_path)
 
@@ -64,7 +63,7 @@ def future_sight(
         with open(".prediction_data.pkl", "rb") as f:
             X, y = pickle.load(f)
 
-    if with_action != "none":
+    if with_extras != "none":
         if not os.path.exists(".prediction_data_action.pkl"):
             add_action(X, model)
             with open(".prediction_data_action.pkl", "rb") as f:
@@ -72,14 +71,14 @@ def future_sight(
         else:
             with open(".prediction_data_action.pkl", "rb") as f:
                 X = pickle.load(f)
-        if with_action == "one-hot":
+        if with_extras == "one-hot":
             X = one_hot_action(X)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    if with_action != "none":
+    if with_extras != "none":
         net = nn.Sequential(
             nn.Linear(len(X_train[0]), 64),
             nn.Tanh(),
@@ -101,7 +100,17 @@ def future_sight(
             nn.Linear(64, len(y_train[0])),
         ).to(device)
 
-    train_net(net, X_train, y_train, X_test, y_test, device, epochs=200)
+    net = train_net(
+        net,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        device,
+        epochs=200,
+        with_extras=with_extras,
+    )
+    torch.save(net.state_dict(), f"pred_model_{with_extras}.pt")
 
 
 def get_future_data(
@@ -135,7 +144,17 @@ def get_future_data(
     return X, Y
 
 
-def train_net(net, X_train, y_train, X_test, y_test, device, epochs=100, batch_size=64):
+def train_net(
+    net,
+    X_train,
+    y_train,
+    X_test,
+    y_test,
+    device,
+    epochs=100,
+    batch_size=64,
+    with_extras="none",
+):
     # Convert data to PyTorch tensors
     X_train = torch.tensor(np.array(X_train), dtype=torch.float32).to(device)
     y_train = torch.tensor(np.array(y_train), dtype=torch.float32).to(device)
@@ -184,7 +203,7 @@ def train_net(net, X_train, y_train, X_test, y_test, device, epochs=100, batch_s
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
-    plt.savefig("tex/images/pred_model_one_hot.pdf")
+    plt.savefig(f"tex/images/pred_model_{with_extras}.pdf")
 
     # Evaluate on test data
     net.eval()
@@ -292,6 +311,6 @@ if __name__ == "__main__":
         env_kwargs,
         latest_policy,
         device,
-        with_action="one-hot",
+        with_extras="one-hot",
         pretrained=False,
     )
