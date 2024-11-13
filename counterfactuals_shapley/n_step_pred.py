@@ -13,59 +13,70 @@ import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from sim_steps import sim_steps
+from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from torch import nn
 
 
-def shap_plot(X, explainer, file_specifier, feature_names):
+def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     # Compute SHAP values for the given dataset X
+
     shap_values = explainer.shap_values(X)
 
     # Handling the case where SHAP values contains multiple outputs
     if isinstance(shap_values, list):
-        shap_values = np.array(shap_values)
+        shap_values = np.stack(shap_values, axis=-1)
 
     assert shap_values.shape[1] == len(
         feature_names
     ), "Mismatch between SHAP values and feature names dimensions."
 
-    # Averaging SHAP values over all provided samples
+    # Compute mean absolute SHAP values across all instances
     mean_shap_values = np.mean(np.abs(shap_values), axis=0)
-
-    # Sort the feature importances
     sorted_indices = np.argsort(mean_shap_values)
-    sorted_attributions = mean_shap_values[sorted_indices]
+
     sorted_feature_names = np.array(feature_names)[sorted_indices]
+
+    # Flatten SHAP values and corresponding feature values for coloring
+    flattened_shap_values = shap_values[:, sorted_indices].flatten()
+    repeated_feature_names = np.tile(sorted_feature_names, X.shape[0])
+    feature_values = X.flatten()
+
+    # Create color map
+    norm = plt.Normalize(np.min(feature_values), np.max(feature_values))
+    colors = plt.cm.viridis(norm(feature_values))
 
     # Create a new figure and axis
     _, ax = plt.subplots(figsize=(8, 12))
 
-    # Scatter plot
-    ax.scatter(sorted_attributions, sorted_feature_names, s=6)
+    # Scatter plot with color gradient
+    scatter = ax.scatter(
+        flattened_shap_values,
+        repeated_feature_names,
+        c=colors,
+        s=10,
+        cmap="bwr",
+    )
 
     # Add horizontal lines for each feature
-    for feature in sorted_feature_names:
-        ax.axhline(
-            np.where(sorted_feature_names == feature)[0][0],
-            color="gray",
-            linestyle="--",
-            linewidth=0.5,
-        )
+    for j, feature in enumerate(sorted_feature_names):
+        ax.axhline(j, color="gray", linestyle="--", linewidth=0.5)
 
     # Add vertical line at x=0
     ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
 
-    # Set labels and title
-    ax.set_xlabel("Mean Absolute SHAP Value")
     ax.set_ylabel("Feature")
-    ax.set_title("Feature Importance via SHAP Values")
+    ax.set_title(f"SHAP values for {coordinate_name} coordinate across all instances")
+
+    # Add a color bar
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label("Feature value")
 
     plt.show()
     # # Save the plot
-    # plt.savefig(f"tex/images/shap_values_{file_specifier}.pdf")
+    # plt.savefig(f"{output_file}_{coordinate_name}_instances.pdf".replace(" ", "_"))
     # plt.close()
-    #
 
 
 def pred(net, n, X):
@@ -378,15 +389,13 @@ if __name__ == "__main__":
         )
         net.eval()
 
-    explainer_x = shap.KernelExplainer(partial(pred, net, 0), shap.kmeans(X, 10))
-    explainer_y = shap.KernelExplainer(partial(pred, net, 1), shap.kmeans(X, 10))
-
-    shap_values_x = explainer_x.shap_values(X)
-    shap_values_y = explainer_y.shap_values(X)
+    explainer_x = shap.KernelExplainer(partial(pred, net, 0), shap.kmeans(X, 100))
+    explainer_y = shap.KernelExplainer(partial(pred, net, 1), shap.kmeans(X, 100))
 
     shap_plot(
-        X[:10],
+        X[50:100],
         explainer_x,
         f"{args.env}_{extras}",
         feature_names,
+        "x",
     )
