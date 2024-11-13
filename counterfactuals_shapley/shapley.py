@@ -69,14 +69,13 @@ def shap_plot(X, explainer, action_name, feature_names):
         shap_values,
         X,
         feature_names=feature_names,
-        show=False,
+        show=True,
     )
-
-    plt.savefig(
-        f"tex/images/shap_plot_kernel_{action_name}.pdf".replace(" ", "_"),
-        bbox_inches="tight",
-    )
-    plt.close()
+    # plt.savefig(
+    #     f"tex/images/shap_plot_kernel_{action_name}.pdf".replace(" ", "_"),
+    #     bbox_inches="tight",
+    # )
+    # plt.close()
 
 
 def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=None):

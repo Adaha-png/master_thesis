@@ -92,15 +92,26 @@ no progress
 ## week 45
 
 Integrated gradients plot
- * logits dont make sense to explain
- * one hot encoding isnt differentiable
- * ergo softmax, additional benefit is a confidence measure of action chosen
+
+* logits dont make sense to explain
+* one hot encoding isnt differentiable
+* ergo softmax, additional benefit is a confidence measure of action chosen
+
+## week 46
 
 Future predictor
- * takes first observation in a sequence
- * predicts position of an agent n steps in the future, not yet trained
+
+* takes first observation in a sequence
+* predicts position of an agent n steps in the future
+* takes extra inputs, action as an int helps, action as one-hot helps more
+* gets decent results
+* shap and ig on these models
 
 # TODO
+
+## shap
+
+* make custom shap plot function
 
 ## sim\_steps
 
@@ -115,6 +126,8 @@ Future predictor
 * [?] surragate shap
 
 * [x] kernel shap
+
+* feature permutation?
 
 ## major changes
 

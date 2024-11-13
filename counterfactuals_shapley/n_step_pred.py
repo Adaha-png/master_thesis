@@ -1,5 +1,4 @@
 import argparse
-import copy
 import glob
 import multiprocessing
 import os
@@ -9,6 +8,7 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
+import shap
 import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
@@ -16,6 +16,63 @@ from sim_steps import sim_steps
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from torch import nn
+
+
+def shap_plot(X, explainer, file_specifier, feature_names):
+    # Compute SHAP values for the given dataset X
+    shap_values = explainer.shap_values(X)
+
+    # Handling the case where SHAP values contains multiple outputs
+    if isinstance(shap_values, list):
+        shap_values = np.array(shap_values)
+
+    assert shap_values.shape[1] == len(
+        feature_names
+    ), "Mismatch between SHAP values and feature names dimensions."
+
+    # Averaging SHAP values over all provided samples
+    mean_shap_values = np.mean(np.abs(shap_values), axis=0)
+
+    # Sort the feature importances
+    sorted_indices = np.argsort(mean_shap_values)
+    sorted_attributions = mean_shap_values[sorted_indices]
+    sorted_feature_names = np.array(feature_names)[sorted_indices]
+
+    # Create a new figure and axis
+    _, ax = plt.subplots(figsize=(8, 12))
+
+    # Scatter plot
+    ax.scatter(sorted_attributions, sorted_feature_names, s=6)
+
+    # Add horizontal lines for each feature
+    for feature in sorted_feature_names:
+        ax.axhline(
+            np.where(sorted_feature_names == feature)[0][0],
+            color="gray",
+            linestyle="--",
+            linewidth=0.5,
+        )
+
+    # Add vertical line at x=0
+    ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
+
+    # Set labels and title
+    ax.set_xlabel("Mean Absolute SHAP Value")
+    ax.set_ylabel("Feature")
+    ax.set_title("Feature Importance via SHAP Values")
+
+    plt.show()
+    # # Save the plot
+    # plt.savefig(f"tex/images/shap_values_{file_specifier}.pdf")
+    # plt.close()
+    #
+
+
+def pred(net, n, X):
+    net.eval()
+    if not type(X) == torch.Tensor:
+        X = torch.Tensor(X)
+    return net(X).detach().numpy()[:, n]
 
 
 def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
@@ -44,61 +101,15 @@ def one_hot_action(X):
 
 def future_sight(
     env_name,
-    env_kwargs,
-    policy_path,
     device,
-    n=10,
-    pretrained=True,
-    with_extras="none",
+    net,
+    X,
+    y,
+    extras="none",
 ):
-    model = PPO.load(policy_path)
-
-    if not os.path.exists(".prediction_data.pkl"):
-        X, y = get_future_data(
-            env_name, env_kwargs, policy_path, steps_per_cycle=n, seed=921
-        )
-        with open(".prediction_data.pkl", "wb") as f:
-            pickle.dump((X, y), f)
-    else:
-        with open(".prediction_data.pkl", "rb") as f:
-            X, y = pickle.load(f)
-
-    if with_extras != "none":
-        if not os.path.exists(".prediction_data_action.pkl"):
-            add_action(X, model)
-            with open(".prediction_data_action.pkl", "rb") as f:
-                X = pickle.load(f)
-        else:
-            with open(".prediction_data_action.pkl", "rb") as f:
-                X = pickle.load(f)
-        if with_extras == "one-hot":
-            X = one_hot_action(X)
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
-
-    if with_extras != "none":
-        net = nn.Sequential(
-            nn.Linear(len(X_train[0]), 64),
-            nn.Tanh(),
-            nn.Linear(64, 64),
-            nn.Tanh(),
-            nn.Linear(64, len(y_train[0])),
-        ).to(device)
-    elif pretrained:
-        net = nn.Sequential(
-            *copy.deepcopy(model.policy.mlp_extractor.policy_net),
-            nn.Linear(64, len(y_train[0])),
-        ).to(device)
-    else:
-        net = nn.Sequential(
-            nn.Linear(18, 64),
-            nn.Tanh(),
-            nn.Linear(64, 64),
-            nn.Tanh(),
-            nn.Linear(64, len(y_train[0])),
-        ).to(device)
 
     net = train_net(
         net,
@@ -108,11 +119,12 @@ def future_sight(
         y_test,
         device,
         epochs=200,
-        with_extras=with_extras,
+        extras=extras,
     )
 
     os.makedirs(".pred_models", exist_ok=True)
-    torch.save(net.state_dict(), f".pred_models/pred_model_{with_extras}.pt")
+    torch.save(net.state_dict(), f".pred_models/pred_model_{env_name}_{extras}.pt")
+    return net
 
 
 def get_future_data(
@@ -155,7 +167,7 @@ def train_net(
     device,
     epochs=100,
     batch_size=64,
-    with_extras="none",
+    extras="none",
 ):
     # Convert data to PyTorch tensors
     X_train = torch.tensor(np.array(X_train), dtype=torch.float32).to(device)
@@ -205,7 +217,7 @@ def train_net(
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
-    plt.savefig(f"tex/images/pred_model_{with_extras}.pdf")
+    plt.savefig(f"tex/images/pred_model_{extras}.pdf")
 
     # Evaluate on test data
     net.eval()
@@ -299,20 +311,82 @@ if __name__ == "__main__":
 
     env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
     try:
-        latest_policy = max(
+        policy_path = max(
             glob.glob(f".{str(env.metadata['name'])}/*.zip"),
             key=os.path.getctime,
         )
-        print(latest_policy)
+        print(policy_path)
     except ValueError:
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    future_sight(
-        args.env,
-        env_kwargs,
-        latest_policy,
-        device,
-        with_extras="one-hot",
-        pretrained=False,
+    extras = "one-hot"
+
+    if extras == "one-hot":
+        feature_names.extend(act_dict.values())
+    elif extras == "action":
+        feature_names.append(extras)
+
+    model = PPO.load(policy_path)
+
+    if not os.path.exists(".prediction_data.pkl"):
+        X, y = get_future_data(
+            args.env, env_kwargs, policy_path, agent=0, steps_per_cycle=10, seed=921
+        )
+        with open(".prediction_data.pkl", "wb") as f:
+            pickle.dump((X, y), f)
+    else:
+        with open(".prediction_data.pkl", "rb") as f:
+            X, y = pickle.load(f)
+
+    if extras != "none":
+        if not os.path.exists(".prediction_data_action.pkl"):
+            add_action(X, model)
+            with open(".prediction_data_action.pkl", "rb") as f:
+                X = pickle.load(f)
+        else:
+            with open(".prediction_data_action.pkl", "rb") as f:
+                X = pickle.load(f)
+        if extras == "one-hot":
+            X = one_hot_action(X)
+
+    net = nn.Sequential(
+        nn.Linear(len(X[0]), 64),
+        nn.Tanh(),
+        nn.Linear(64, 64),
+        nn.Tanh(),
+        nn.Linear(64, len(y[0])),
+    ).to(device)
+
+    if not os.path.exists(f".pred_models/pred_model_{args.env}_{extras}.pt"):
+        net = future_sight(
+            args.env,
+            device,
+            net,
+            X,
+            y,
+            extras=extras,
+        )
+        net.eval()
+    else:
+        net.load_state_dict(
+            torch.load(
+                f".pred_models/pred_model_{args.env}_{extras}.pt",
+                weights_only=True,
+                map_location=device,
+            )
+        )
+        net.eval()
+
+    explainer_x = shap.KernelExplainer(partial(pred, net, 0), shap.kmeans(X, 10))
+    explainer_y = shap.KernelExplainer(partial(pred, net, 1), shap.kmeans(X, 10))
+
+    shap_values_x = explainer_x.shap_values(X)
+    shap_values_y = explainer_y.shap_values(X)
+
+    shap_plot(
+        X[:10],
+        explainer_x,
+        f"{args.env}_{extras}",
+        feature_names,
     )

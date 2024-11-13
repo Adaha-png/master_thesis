@@ -236,7 +236,8 @@ actions in a single timestep</p></li>
 <li><p>pareto optimal points for amount of actions changed</p></li>
 <li><p>implemented for discrete, but not functional yet</p></li>
 </ul>
-<h2 id="week-42">week 42</h2>
+<p><a href="./tex/images/best_counterfactuals_with_model.pdf">Actions
+changed for a single timestep</a> ## week 42</p>
 <ul>
 <li><p>fixed issues from week 41</p></li>
 <li><p>started implemented random forest surrogate model
@@ -252,6 +253,25 @@ important actions in critical states.</p></li>
 <p><a href="./tex/images/shap_plot_kernel_move_up.pdf">Shapley values
 for moving up in a critical state in which the agent decided to move
 up</a></p>
+<h2 id="week-44">week 44</h2>
+<p>no progress</p>
+<h2 id="week-45">week 45</h2>
+<p>Integrated gradients plot</p>
+<ul>
+<li>logits dont make sense to explain</li>
+<li>one hot encoding isnt differentiable</li>
+<li>ergo softmax, additional benefit is a confidence measure of action
+chosen</li>
+</ul>
+<p>Future predictor</p>
+<ul>
+<li>takes first observation in a sequence</li>
+<li>predicts position of an agent n steps in the future</li>
+<li>takes extra inputs, action as an int helps, action as one-hot helps
+more</li>
+<li>gets decent results</li>
+<li>shap and ig on these models</li>
+</ul>
 <h1 id="todo">TODO</h1>
 <h2 id="sim_steps">sim_steps</h2>
 <ul class="task-list">
@@ -269,6 +289,7 @@ found actions</h2>
 <li><p>[?] surragate shap</p></li>
 <li><p><label><input type="checkbox" checked="" />kernel
 shap</label></p></li>
+<li><p>feature permutation?</p></li>
 </ul>
 <h2 id="major-changes">major changes</h2>
 <ul>
