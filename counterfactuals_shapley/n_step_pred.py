@@ -393,7 +393,7 @@ if __name__ == "__main__":
     explainer_y = shap.KernelExplainer(partial(pred, net, 1), shap.kmeans(X, 100))
 
     shap_plot(
-        X[50:100],
+        X[:100],
         explainer_x,
         f"{args.env}_{extras}",
         feature_names,
