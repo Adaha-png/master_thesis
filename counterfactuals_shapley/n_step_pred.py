@@ -60,8 +60,8 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     )
 
     # Add horizontal lines for each feature
-    for j, feature in enumerate(sorted_feature_names):
-        ax.axhline(j, color="gray", linestyle="--", linewidth=0.5)
+    for i in range(len(sorted_feature_names)):
+        ax.axhline(i, color="gray", linestyle="--", linewidth=0.5)
 
     # Add vertical line at x=0
     ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
@@ -73,17 +73,18 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label("Feature value")
 
-    plt.show()
-    # # Save the plot
-    # plt.savefig(f"{output_file}_{coordinate_name}_instances.pdf".replace(" ", "_"))
-    # plt.close()
+    # Save the plot
+    plt.savefig(
+        f"tex/images/{output_file}_{coordinate_name}_instances.pdf".replace(" ", "_")
+    )
+    plt.close()
 
 
-def pred(net, n, X):
+def pred(net, n, device, X):
     net.eval()
     if not type(X) == torch.Tensor:
-        X = torch.Tensor(X)
-    return net(X).detach().numpy()[:, n]
+        X = torch.Tensor(X).to(device)
+    return net(X).cpu().detach().numpy()[:, n]
 
 
 def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
@@ -389,13 +390,25 @@ if __name__ == "__main__":
         )
         net.eval()
 
-    explainer_x = shap.KernelExplainer(partial(pred, net, 0), shap.kmeans(X, 100))
-    explainer_y = shap.KernelExplainer(partial(pred, net, 1), shap.kmeans(X, 100))
+    explainer_x = shap.KernelExplainer(
+        partial(pred, net, 0, device), shap.kmeans(X, 100)
+    )
+    explainer_y = shap.KernelExplainer(
+        partial(pred, net, 1, device), shap.kmeans(X, 100)
+    )
 
     shap_plot(
-        X[50:100],
+        X[:50],
         explainer_x,
         f"{args.env}_{extras}",
         feature_names,
         "x",
+    )
+
+    shap_plot(
+        X[:50],
+        explainer_y,
+        f"{args.env}_{extras}",
+        feature_names,
+        "y",
     )
