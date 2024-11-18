@@ -8,41 +8,61 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from captum.attr import IntegratedGradients
+from captum_grads import create_baseline
 from counterfactuals import action_difference_with_model, counterfactuals_with_model
+from n_step_pred import add_action, future_sight, get_future_data, one_hot_action
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import get_data
 from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from torch import nn
 
 
-def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device):
-    model = PPO.load(policy)
-
-    net = nn.Sequential(
-        *model.policy.mlp_extractor.policy_net,
-        model.policy.action_net,
-        nn.Softmax(),
-    ).to(device)
-
+def ig_extract_future(
+    env,
+    policy,
+    net,
+    obs,
+    agent,
+    coordinate,
+    feature_names,
+    device,
+    seed=10923378429,
+):
+    coordinates = ["x", "y"]
     ig = IntegratedGradients(net)
 
-    if not os.path.exists(".baseline.pt"):
-        baseline = create_baseline(env, policy, agent, device)
-        torch.save(baseline, ".baseline.pt")
+    if not os.path.exists(f".baseline_future_{env.metadata["name"]}.pt"):
+        baseline = create_baseline(
+            env, policy, agent, device, steps_per_cycle=1, seed=seed
+        )
+        torch.save(baseline, f".baseline_future_{env.metadata["name"]}.pt")
     else:
-        baseline = torch.load(".baseline.pt", map_location=device)
+        baseline = torch.load(
+            f".baseline_future_{env.metadata["name"]}.pt", map_location=device
+        )
+    if isinstance(obs, np.ndarray):
+        obs = torch.from_numpy(obs)
+
+    baseline = (
+        torch.Tensor(
+            [*baseline[0], *[0 for _ in range(len(obs) - len(baseline[0]))]],
+        )
+        .to(device=device, dtype=torch.float32)
+        .unsqueeze(0)
+    )
+
+    obs = obs.to(
+        device=device,
+        dtype=torch.float32,
+    ).unsqueeze(0)
 
     print(f"{baseline=}")
     print(f"{obs=}")
-
-    obs.to(device)
-
     attributions, approximation_error = ig.attribute(
         obs,
         baselines=baseline,
-        target=action,
+        target=coordinate,
         method="gausslegendre",
         return_convergence_delta=True,
     )
@@ -55,7 +75,9 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     attributions = attributions[sorted_indices]
     feature_names = np.array(feature_names)[sorted_indices]
 
-    print(f"Action: {act_dict[action]}, Confidence:{net.forward(obs)[0,action]}")
+    print(
+        f"Coordinate: {coordinates[coordinate]}, Value:{net.forward(obs)[0,coordinate]}"
+    )
 
     # Create a new figure and axis
     _, ax = plt.subplots(figsize=(8, 12))
@@ -75,21 +97,11 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     ax.set_title("Integrated gradients method")
 
     # Show the plot
-    plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
-
-
-def create_baseline(env, policy, agent, device, steps_per_cycle=10, seed=1234567):
-    obs, _ = get_data(
-        env,
-        policy,
-        total_steps=1000,
-        steps_per_cycle=steps_per_cycle,
-        agent=agent,
-        seed=seed,
+    plt.savefig(
+        f"tex/images/intgrad_{coordinates[coordinate]}_{env.metadata['name']}.pdf".replace(
+            " ", "_"
+        )
     )
-
-    baseline = torch.mean(torch.tensor(obs), dim=0).unsqueeze(0)
-    return baseline.to(device)
 
 
 if __name__ == "__main__":
@@ -174,60 +186,91 @@ if __name__ == "__main__":
 
     env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
     try:
-        latest_policy = max(
+        policy_path = max(
             glob.glob(f".{str(env.metadata['name'])}/*.zip"),
             key=os.path.getctime,
         )
-        print(latest_policy)
+        print(policy_path)
     except ValueError:
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    if not os.path.exists(".obs_act_ag.pkl"):
-        seq = sim_steps(env, latest_policy, num_steps=20, seed=seed)
-        individuals = counterfactuals_with_model(env, seq, latest_policy, seed)
+    extras = "one-hot"
 
-        individual = [
-            i.features
-            for i in individuals
-            if action_difference_with_model(*i.features) == 1
-        ][0]
+    if extras == "one-hot":
+        feature_names.extend(act_dict.values())
+    elif extras == "action":
+        feature_names.append(extras)
 
-        index = int(individual[0])
-        relevant_obs = seq[index]["observation"]
+    model = PPO.load(policy_path)
 
-        agent = np.argmax(individual[1:])
-        action = seq[index]["action"][agent]
-        relevant_obs = torch.from_numpy(relevant_obs[agent]).unsqueeze(0)
-        print(f"{action := int(action)=}")
-
-        # Assuming the action and relevant_obs variables are already defined
-        data_to_save = {
-            "action": action,
-            "relevant_obs": relevant_obs,
-            "agent": agent,
-        }
-
-        # Save to a file
-        with open(".obs_act_ag.pkl", "wb") as f:
-            pickle.dump(data_to_save, f)
+    if not os.path.exists(".prediction_data.pkl"):
+        X, y = get_future_data(
+            args.env, env_kwargs, policy_path, agent=0, steps_per_cycle=10, seed=921
+        )
+        with open(".prediction_data.pkl", "wb") as f:
+            pickle.dump((X, y), f)
     else:
-        # Load from the file
-        with open(".obs_act_ag.pkl", "rb") as f:
-            loaded_data = pickle.load(f)
+        with open(".prediction_data.pkl", "rb") as f:
+            X, y = pickle.load(f)
 
-        # Extracting the saved data
-        action = loaded_data["action"]
-        relevant_obs = loaded_data["relevant_obs"]
-        agent = loaded_data["agent"]
-    print(f"{action=}")
-    ig_extract(
+    if extras != "none":
+        if not os.path.exists(".prediction_data_action.pkl"):
+            add_action(X, model)
+            with open(".prediction_data_action.pkl", "rb") as f:
+                X = pickle.load(f)
+        else:
+            with open(".prediction_data_action.pkl", "rb") as f:
+                X = pickle.load(f)
+        if extras == "one-hot":
+            X = one_hot_action(X)
+
+    net = nn.Sequential(
+        nn.Linear(len(X[0]), 64),
+        nn.Tanh(),
+        nn.Linear(64, 64),
+        nn.Tanh(),
+        nn.Linear(64, len(y[0])),
+    )
+
+    if not os.path.exists(f".pred_models/pred_model_{args.env}_{extras}.pt"):
+        net = future_sight(
+            args.env,
+            device,
+            net,
+            X,
+            y,
+            extras=extras,
+        )
+        net.eval()
+    else:
+        net.load_state_dict(
+            torch.load(
+                f".pred_models/pred_model_{args.env}_{extras}.pt",
+                weights_only=True,
+                map_location=device,
+            )
+        )
+        net.eval()
+
+    ig_extract_future(
         env,
-        latest_policy,
-        relevant_obs,
-        action,
-        agent,
+        policy_path,
+        net,
+        X[74],
+        0,
+        0,  # 0 coordinate is x, 1 is y
         feature_names,
-        act_dict,
+        device,
+    )
+
+    ig_extract_future(
+        env,
+        policy_path,
+        net,
+        X[74],
+        0,
+        1,  # 0 coordinate is x, 1 is y
+        feature_names,
         device,
     )
