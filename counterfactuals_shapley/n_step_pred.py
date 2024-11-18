@@ -271,7 +271,7 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = "one-hot"
+    extras = "none"
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
@@ -329,11 +329,22 @@ if __name__ == "__main__":
         )
         net.eval()
 
+    with torch.no_grad():
+        criterion = nn.MSELoss()
+        X = torch.Tensor(np.array(X)).to(device)
+        y = torch.Tensor(np.array(y)).to(device)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        test_outputs = net(X_test)
+        test_loss = criterion(test_outputs, y_test).item()
+        print(test_loss)
+
     explainer_x = shap.KernelExplainer(
-        partial(pred, net, 0, device), shap.kmeans(X, 100)
+        partial(pred, net, 0, device), shap.kmeans(X.to(device="cpu"), 100)
     )
     explainer_y = shap.KernelExplainer(
-        partial(pred, net, 1, device), shap.kmeans(X, 100)
+        partial(pred, net, 1, device), shap.kmeans(X.to(device="cpu"), 100)
     )
 
     shap_plot(
