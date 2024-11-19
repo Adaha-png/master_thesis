@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
     try:
         latest_policy = max(
-            glob.glob(f"{str(env.metadata['name'])}/*.zip"),
+            glob.glob(f".{str(env.metadata['name'])}/*.zip"),
             key=os.path.getctime,
         )
         print(latest_policy)
@@ -183,4 +183,4 @@ if __name__ == "__main__":
         exit(0)
 
     pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(sim_steps(env, latest_policy, num_steps=args.steps))
+    pp.pprint(sim_steps(env, latest_policy, num_steps=args.steps, seed=1))
