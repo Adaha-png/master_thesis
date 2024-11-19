@@ -331,7 +331,7 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = "none"
+    extras = "action"
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
@@ -391,20 +391,33 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         criterion = nn.MSELoss()
-        X = torch.Tensor(np.array(X)).to(device)
-        y = torch.Tensor(np.array(y)).to(device)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        if not os.path.exists(".prediction_test_data.pkl"):
+            X_test, y_test = get_future_data(
+                args.env,
+                env_kwargs,
+                policy_path,
+                agent=0,
+                amount_cycles=10000,
+                steps_per_cycle=10,
+                seed=483927,
+            )
+            with open(".prediction_test_data.pkl", "wb") as f:
+                pickle.dump((X_test, y_test), f)
+        else:
+            with open(".prediction_test_data.pkl", "rb") as f:
+                X_test, y_test = pickle.load(f)
+
+        X_test = torch.Tensor(np.array(X_test)).to(device)
+        y_test = torch.Tensor(np.array(y_test)).to(device)
         test_outputs = net(X_test)
         test_loss = criterion(test_outputs, y_test).item()
         print(test_loss)
 
     explainer_x = shap.KernelExplainer(
-        partial(pred, net, 0, device), shap.kmeans(X.to(device="cpu"), 100)
+        partial(pred, net, 0, device), shap.kmeans(X, 100)
     )
     explainer_y = shap.KernelExplainer(
-        partial(pred, net, 1, device), shap.kmeans(X.to(device="cpu"), 100)
+        partial(pred, net, 1, device), shap.kmeans(X, 100)
     )
 
     shap_plot(
