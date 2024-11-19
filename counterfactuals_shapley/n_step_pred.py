@@ -9,7 +9,10 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
+import supersuit as ss
 import torch
+from captum.attr import IntegratedGradients
+from captum_grads import create_baseline
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from shapley import shap_plot
@@ -17,6 +20,34 @@ from sim_steps import sim_steps
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from torch import nn
+from tqdm import tqdm
+
+
+def add_ig(X, ig, env, target, device, extras="none"):
+    if isinstance(X, np.ndarray):
+        X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
+    elif isinstance(X, list):
+        X = torch.Tensor(X).to(device=device, dtype=torch.float32)
+
+    env_name = env.metadata["name"]
+    env = ss.black_death_v3(env)
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
+    num_acts = env.action_space.n
+
+    if extras == "one-hot":
+        new_X = [
+            np.array([*obs, *ig(obs[:-num_acts], target=target)[0]]) for obs in tqdm(X)
+        ]
+    elif extras == "action":
+        new_X = [np.array([*obs, *ig(obs[:-1], target=target)[0]]) for obs in X]
+    else:
+        new_X = [np.array([*obs, *ig(obs, target=target)[0]]) for obs in X]
+
+    with open(f".prediction_data_ig_{extras}_{env_name}_{target}.pkl", "wb") as f:
+        pickle.dump(new_X, f)
+
+    return new_X
 
 
 def pred(net, n, device, X):
@@ -177,8 +208,6 @@ def train_net(
         test_loss = criterion(test_outputs, y_test).item()
         print(f"Test Loss: {test_loss}")
 
-    return net
-
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -271,7 +300,9 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = "none"
+    extras = "one-hot"  # none, action or one-hot
+    explainer_extras = "ig"  # none, ig or shap
+    target = 0
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
@@ -300,6 +331,44 @@ if __name__ == "__main__":
                 X = pickle.load(f)
         if extras == "one-hot":
             X = one_hot_action(X)
+
+    if explainer_extras == "ig":
+        if (
+            not os.path.exists(
+                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl"
+            )
+            or True
+        ):
+            policy_net = nn.Sequential(
+                *model.policy.mlp_extractor.policy_net,
+                model.policy.action_net,
+                nn.Softmax(),
+            ).to(device)
+
+            ig = IntegratedGradients(policy_net)
+            if not os.path.exists(f".baseline_future_{env.metadata["name"]}.pt"):
+                baseline = create_baseline(
+                    env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                )
+                torch.save(baseline, f".baseline_future_{env.metadata["name"]}.pt")
+            else:
+                baseline = torch.load(
+                    f".baseline_future_{env.metadata["name"]}.pt", map_location=device
+                )
+
+            ig_partial = partial(
+                ig.attribute,
+                baselines=baseline,
+                method="gausslegendre",
+                return_convergence_delta=False,
+            )
+            X = add_ig(X, ig_partial, env, target, device, extras=extras)
+        else:
+            with open(
+                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}).pkl",
+                "rb",
+            ) as f:
+                X = pickle.load(f)
 
     net = nn.Sequential(
         nn.Linear(len(X[0]), 64),
@@ -340,25 +409,15 @@ if __name__ == "__main__":
         test_loss = criterion(test_outputs, y_test).item()
         print(test_loss)
 
-    explainer_x = shap.KernelExplainer(
-        partial(pred, net, 0, device), shap.kmeans(X.to(device="cpu"), 100)
-    )
-    explainer_y = shap.KernelExplainer(
-        partial(pred, net, 1, device), shap.kmeans(X.to(device="cpu"), 100)
+    coordinate_names = ["x", "y"]
+    explainer = shap.KernelExplainer(
+        partial(pred, net, target, device), shap.kmeans(X.to(device="cpu"), 100)
     )
 
     shap_plot(
         X[:50],
-        explainer_x,
+        explainer,
         f"{args.env}_{extras}",
         feature_names,
-        "x",
-    )
-
-    shap_plot(
-        X[:50],
-        explainer_y,
-        f"{args.env}_{extras}",
-        feature_names,
-        "y",
+        coordinate_names[target],
     )

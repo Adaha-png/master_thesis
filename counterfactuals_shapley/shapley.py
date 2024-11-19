@@ -12,34 +12,8 @@ import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from sim_steps import sim_steps
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from tqdm import tqdm
-
-# def surrogate_shap(env, policy, seed=None):
-#     X, y = get_data(env, policy, seed=seed)
-#
-#     X_train, X_test, y_train, y_test = train_test_split(
-#         X, y, test_size=0.2, random_state=seed
-#     )
-#     model = RandomForestClassifier(n_estimators=100, random_state=seed)
-#     model.fit(X_train, y_train)
-#
-#     # Ensure your model achieves a reasonable performance
-#     print(f"Model Accuracy: {model.score(X_test, y_test):.2f}")
-#
-#     explainer = shap.TreeExplainer(model)
-#
-#     shap_values = explainer.shap_values(X_test)
-#     plt.figure()
-#     shap.summary_plot(
-#         shap_values,
-#         X_test,
-#         show=False,
-#     )
-#     plt.savefig(f"tex/images/shap_plot_surrogate.pdf", bbox_inches="tight")
-#     plt.close()
 
 
 def pred(model, act, obs):
