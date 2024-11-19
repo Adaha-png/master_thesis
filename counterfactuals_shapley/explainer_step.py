@@ -136,4 +136,6 @@ if __name__ == "__main__":
         agent = loaded_data["agent"]
     print(f"{action=}")
     explainer = kernel_explainer(env, latest_policy, agent, action, seed=seed)
-    shap_plot(relevant_obs, explainer, act_dict[action], feature_names)
+    shap_plot(
+        relevant_obs, explainer, f"{args.env}_policy", feature_names, act_dict[action]
+    )
