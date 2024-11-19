@@ -37,12 +37,15 @@ def add_ig(X, ig, env, target, device, extras="none"):
 
     if extras == "one-hot":
         new_X = [
-            np.array([*obs, *ig(obs[:-num_acts], target=target)[0]]) for obs in tqdm(X)
+            np.array([*obs.cpu(), *ig(obs[:-num_acts], target=target)[0].cpu()])
+            for obs in tqdm(X)
         ]
     elif extras == "action":
-        new_X = [np.array([*obs, *ig(obs[:-1], target=target)[0]]) for obs in X]
+        new_X = [
+            np.array([*obs.cpu(), *ig(obs[:-1], target=target)[0].cpu()]) for obs in X
+        ]
     else:
-        new_X = [np.array([*obs, *ig(obs, target=target)[0]]) for obs in X]
+        new_X = [np.array([*obs.cpu(), *ig(obs, target=target)[0].cpu()]) for obs in X]
 
     with open(f".prediction_data_ig_{extras}_{env_name}_{target}.pkl", "wb") as f:
         pickle.dump(new_X, f)
@@ -333,11 +336,8 @@ if __name__ == "__main__":
             X = one_hot_action(X)
 
     if explainer_extras == "ig":
-        if (
-            not os.path.exists(
-                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl"
-            )
-            or True
+        if not os.path.exists(
+            f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl"
         ):
             policy_net = nn.Sequential(
                 *model.policy.mlp_extractor.policy_net,
@@ -346,14 +346,14 @@ if __name__ == "__main__":
             ).to(device)
 
             ig = IntegratedGradients(policy_net)
-            if not os.path.exists(f".baseline_future_{env.metadata["name"]}.pt"):
+            if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
                 baseline = create_baseline(
                     env, policy_path, 0, device, steps_per_cycle=1, seed=seed
                 )
-                torch.save(baseline, f".baseline_future_{env.metadata["name"]}.pt")
+                torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
             else:
                 baseline = torch.load(
-                    f".baseline_future_{env.metadata["name"]}.pt", map_location=device
+                    f".baseline_future_{env.metadata['name']}.pt", map_location=device
                 )
 
             ig_partial = partial(

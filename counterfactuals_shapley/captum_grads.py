@@ -33,7 +33,7 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
         torch.save(baseline, ".baseline.pt")
     else:
         baseline = torch.load(
-            f".baseline_future_{env.metadata["name"]}.pt", map_location=device
+            f".baseline_future_{env.metadata['name']}.pt", map_location=device
         )
 
     print(f"{baseline=}")
