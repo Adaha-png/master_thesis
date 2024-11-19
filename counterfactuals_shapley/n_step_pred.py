@@ -300,13 +300,9 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-<<<<<<< HEAD
-    extras = "action"
-=======
     extras = "one-hot"  # none, action or one-hot
     explainer_extras = "ig"  # none, ig or shap
     target = 0
->>>>>>> 9fb6934295091e6d4d8cb47bd826a5f4ab7357b6
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
