@@ -23,7 +23,7 @@ from torch import nn
 from tqdm import tqdm
 
 
-def add_ig(X, ig, env, target, device, extras="none"):
+def add_ig(X, ig, env, target, device, extras="none", save=True):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -46,9 +46,9 @@ def add_ig(X, ig, env, target, device, extras="none"):
         ]
     else:
         new_X = [np.array([*obs.cpu(), *ig(obs, target=target)[0].cpu()]) for obs in X]
-
-    with open(f".prediction_data_ig_{extras}_{env_name}_{target}.pkl", "wb") as f:
-        pickle.dump(new_X, f)
+    if save:
+        with open(f".prediction_data_ig_{extras}_{env_name}_{target}.pkl", "wb") as f:
+            pickle.dump(new_X, f)
 
     return new_X
 
@@ -71,10 +71,12 @@ def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, age
     return X, Y
 
 
-def add_action(X, model):
+def add_action(X, model, save=True):
     new_X = [np.array([*obs, model.predict(obs)[0]]) for obs in X]
-    with open(".prediction_data_action.pkl", "wb") as f:
-        pickle.dump(new_X, f)
+    if save:
+        with open(".prediction_data_action.pkl", "wb") as f:
+            pickle.dump(new_X, f)
+    return new_X
 
 
 def one_hot_action(X):
@@ -105,10 +107,14 @@ def future_sight(
         device,
         epochs=200,
         extras=extras,
+        explainer_extras=explainer_extras,
     )
 
     os.makedirs(".pred_models", exist_ok=True)
-    torch.save(net.state_dict(), f".pred_models/pred_model_{env_name}_{extras}.pt")
+    torch.save(
+        net.state_dict(),
+        f".pred_models/pred_model_{env_name}_{extras}_{explainer_extras}.pt",
+    )
     return net
 
 
@@ -130,6 +136,7 @@ def get_future_data(
     sim_func = partial(
         simulate_cycle, env_name, env_kwargs, policy_path, steps_per_cycle, agent=agent
     )
+
     results = pool.starmap(sim_func, [(seed + c,) for c in range(amount_cycles)])
 
     pool.close()
@@ -153,6 +160,7 @@ def train_net(
     epochs=100,
     batch_size=64,
     extras="none",
+    explainer_extras="none",
 ):
     # Convert data to PyTorch tensors
     X_train = torch.tensor(np.array(X_train), dtype=torch.float32).to(device)
@@ -186,6 +194,8 @@ def train_net(
 
             total_loss += loss.item()
 
+        print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}")
+
         net.eval()
         with torch.no_grad():
             test_outputs = net(X_test)
@@ -196,13 +206,12 @@ def train_net(
         if scheduler.get_last_lr() != last_lr:
             last_lr = scheduler.get_last_lr()
             print(f"New lr: {last_lr}")
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}")
 
     plt.plot(range(1, (1 + len(eval_loss)), 1), eval_loss)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
-    plt.savefig(f"tex/images/pred_model_{extras}.pdf")
+    plt.savefig(f"tex/images/pred_model_{extras}_{explainer_extras}.pdf")
 
     # Evaluate on test data
     net.eval()
@@ -210,6 +219,8 @@ def train_net(
         test_outputs = net(X_test)
         test_loss = criterion(test_outputs, y_test).item()
         print(f"Test Loss: {test_loss}")
+
+    return net
 
 
 if __name__ == "__main__":
@@ -353,7 +364,9 @@ if __name__ == "__main__":
                 torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
             else:
                 baseline = torch.load(
-                    f".baseline_future_{env.metadata['name']}.pt", map_location=device
+                    f".baseline_future_{env.metadata['name']}.pt",
+                    map_location=device,
+                    weights_only=True,
                 )
 
             ig_partial = partial(
@@ -418,15 +431,53 @@ if __name__ == "__main__":
             with open(".prediction_test_data.pkl", "rb") as f:
                 X_test, y_test = pickle.load(f)
 
+        if not extras == "none":
+            X_test = add_action(X_test, model, save=False)
+            if extras == "one-hot":
+                X_test = one_hot_action(X_test)
+
+        if explainer_extras == "ig":
+            policy_net = nn.Sequential(
+                *model.policy.mlp_extractor.policy_net,
+                model.policy.action_net,
+                nn.Softmax(),
+            ).to(device)
+
+            ig = IntegratedGradients(policy_net)
+            if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
+                baseline = create_baseline(
+                    env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                )
+                torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
+            else:
+                baseline = torch.load(
+                    f".baseline_future_{env.metadata['name']}.pt",
+                    map_location=device,
+                    weights_only=True,
+                )
+            ig_partial = partial(
+                ig.attribute,
+                baselines=baseline,
+                method="gausslegendre",
+                return_convergence_delta=False,
+            )
+
+            X_test = add_ig(
+                X_test, ig_partial, env, target, device, extras=extras, save=False
+            )
+
         X_test = torch.Tensor(np.array(X_test)).to(device)
         y_test = torch.Tensor(np.array(y_test)).to(device)
         test_outputs = net(X_test)
         test_loss = criterion(test_outputs, y_test).item()
         print(test_loss)
 
+    if not isinstance(X, np.ndarray):
+        X = np.array(X)
+
     coordinate_names = ["x", "y"]
     explainer = shap.KernelExplainer(
-        partial(pred, net, target, device), shap.kmeans(X.to(device="cpu"), 100)
+        partial(pred, net, target, device), shap.kmeans(X, 100)
     )
 
     shap_plot(
