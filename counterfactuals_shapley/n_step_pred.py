@@ -365,7 +365,7 @@ if __name__ == "__main__":
             X = add_ig(X, ig_partial, env, target, device, extras=extras)
         else:
             with open(
-                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}).pkl",
+                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -378,7 +378,9 @@ if __name__ == "__main__":
         nn.Linear(64, len(y[0])),
     ).to(device)
 
-    if not os.path.exists(f".pred_models/pred_model_{args.env}_{extras}.pt"):
+    if not os.path.exists(
+        f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt"
+    ):
         net = future_sight(
             args.env,
             device,
@@ -391,7 +393,7 @@ if __name__ == "__main__":
     else:
         net.load_state_dict(
             torch.load(
-                f".pred_models/pred_model_{args.env}_{extras}.pt",
+                f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
