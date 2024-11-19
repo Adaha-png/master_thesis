@@ -5,6 +5,7 @@ import os
 import pprint
 import random
 import sys
+import warnings
 
 import numpy as np
 import supersuit as ss
@@ -17,7 +18,9 @@ from custom_env_utils import par_env_with_seed
 
 
 def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
-    model = PPO.load(policy)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        model = PPO.load(policy)
     if seed:
         env = par_env_with_seed(env, seed)
     else:
