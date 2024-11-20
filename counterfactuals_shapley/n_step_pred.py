@@ -23,7 +23,7 @@ from torch import nn
 from tqdm import tqdm
 
 
-def add_ig(X, ig, env, target, device, extras="none", save=True):
+def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -37,17 +37,29 @@ def add_ig(X, ig, env, target, device, extras="none", save=True):
 
     if extras == "one-hot":
         new_X = [
-            np.array([*obs.cpu(), *ig(obs[:-num_acts], target=target)[0].cpu()])
+            np.array(
+                [
+                    *obs.cpu(),
+                    *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0].cpu(),
+                ]
+            )
             for obs in tqdm(X)
         ]
     elif extras == "action":
         new_X = [
-            np.array([*obs.cpu(), *ig(obs[:-1], target=target)[0].cpu()]) for obs in X
+            np.array([*obs.cpu(), *ig(obs[:-1], target=obs[-1])[0].cpu()]) for obs in X
         ]
     else:
-        new_X = [np.array([*obs.cpu(), *ig(obs, target=target)[0].cpu()]) for obs in X]
+        if not policy_path:
+            print("policy path required for extras = none")
+            exit(0)
+        model = PPO.load(policy_path)
+        new_X = [
+            np.array([*obs.cpu(), *ig(obs, target=model.predict(obs))[0].cpu()])
+            for obs in X
+        ]
     if save:
-        with open(f".prediction_data_ig_{extras}_{env_name}_{target}.pkl", "wb") as f:
+        with open(f".prediction_data_ig_{extras}_{env_name}.pkl", "wb") as f:
             pickle.dump(new_X, f)
 
     return new_X
@@ -314,9 +326,8 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = "one-hot"  # none, action or one-hot
+    extras = "none"  # none, action or one-hot
     explainer_extras = "ig"  # none, ig or shap
-    target = 0
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
@@ -348,7 +359,7 @@ if __name__ == "__main__":
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl"
+            f".prediction_data_ig_{extras}_{env.metadata['name']}.pkl"
         ):
             policy_net = nn.Sequential(
                 *model.policy.mlp_extractor.policy_net,
@@ -375,10 +386,10 @@ if __name__ == "__main__":
                 method="gausslegendre",
                 return_convergence_delta=False,
             )
-            X = add_ig(X, ig_partial, env, target, device, extras=extras)
+            X = add_ig(X, ig_partial, env, device, extras=extras)
         else:
             with open(
-                f".prediction_data_ig_{extras}_{env.metadata['name']}_{target}.pkl",
+                f".prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -462,9 +473,7 @@ if __name__ == "__main__":
                 return_convergence_delta=False,
             )
 
-            X_test = add_ig(
-                X_test, ig_partial, env, target, device, extras=extras, save=False
-            )
+            X_test = add_ig(X_test, ig_partial, env, device, extras=extras, save=False)
 
         X_test = torch.Tensor(np.array(X_test)).to(device)
         y_test = torch.Tensor(np.array(y_test)).to(device)
@@ -475,15 +484,16 @@ if __name__ == "__main__":
     if not isinstance(X, np.ndarray):
         X = np.array(X)
 
+    coordinate = 0
     coordinate_names = ["x", "y"]
     explainer = shap.KernelExplainer(
-        partial(pred, net, target, device), shap.kmeans(X, 100)
+        partial(pred, net, coordinate, device), shap.kmeans(X, 100)
     )
 
     shap_plot(
         X[:50],
         explainer,
-        f"{args.env}_{extras}",
+        f"{args.env}_{extras}_{explainer_extras}",
         feature_names,
-        coordinate_names[target],
+        coordinate_names[coordinate],
     )
