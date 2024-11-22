@@ -288,23 +288,23 @@ By integrating the gradient of the model prediction when going from a specified 
 
 In an environment where the agents successfully reaches a desirable state we can assume that at some point in the trajectory an agents intent is to reach this state. We can train a prediction model on such an environment that uses a certain state or observation as input and outputs features of interest some time in the future. In the example of autonomous vehicles the output could be predicted position of the vehicle at a future point in time. If our prediction model is successful, then it could be considered part of an explanation for the intent of an agent.
 Additionally, we train different models with different sets of inputs to identify what is important to identify intent. We train one model that takes just the observation as input, one that takes observation and action, and one that takes observation and action one hot encoded. While action as an integer and action one hot encoded contains the same amount of information it could be easier for a network to learn correlations with the additional inputs. Looking at the loss curve during training, as well as final loss, this suspicion is confirmed to be true when dealing with a network architecture and environment like we are currently using, 2 fully connected hidden layers with the hyperbolic tangent as the activation, in the environment simple\_spread\_v3. While the input layer for the three prediction models are slightly different the difference in training time is negligible. 
-After 200 epochs the base prediction model reached a evaluation loss of 0.0407, the model with integer action as part of the input reached a evaluation loss of 0.0359 and the model with one-hot encoded action as part of the input reached an evaluation loss of 0.0322. See figure \ref{fig:pred_loss_none}, \ref{fig:pred_loss_action} and \ref{fig:pred_loss_one-hot}. Both the base model and the one-hot action model stagnate long before 200 epochs is reached. If we let the model with integer action as input train for another 50 epochs it does not improve. The test loss for these three models respectively is.
+After 200 epochs the base prediction model reached a evaluation loss of 0.0407, the model with integer action as part of the input reached a evaluation loss of 0.0359 and the model with one-hot encoded action as part of the input reached an evaluation loss of 0.0322. See figure \ref{fig:pred_loss_none}, \ref{fig:pred_loss_action} and \ref{fig:pred_loss_one-hot}. Both the base model and the one-hot action model stagnate long before 200 epochs is reached. If we let the model with integer action as input train for another 50 epochs it does not improve. The test loss for these three models respectively is ... . These graphs and values indicate that while action and an explanation are useful for extracting intent, in the context of our environment and model one-hot values and integrated gradient explanation are the most useful. The difference between using Shapley values and
 
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_none.pdf}
+	\includegraphics[width=\columnwidth]{images/pred_model_none_none.pdf}
 	\caption{Loss on evaluation set during training with only observation as input}
 	\label{fig:pred_loss_none} 
 \end{figure}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_action.pdf}
+	\includegraphics[width=\columnwidth]{images/pred_model_action_none.pdf}
 	\caption{Loss on evaluation set during training with observation and action as integer as input}
 	\label{fig:pred_loss_action} 
 \end{figure}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_one-hot.pdf}
+	\includegraphics[width=\columnwidth]{images/pred_model_one-hot_none.pdf}
 	\caption{Loss on evaluation set during training with observation and action one-hot encoded as input}
 	\label{fig:pred_loss_one-hot} 
 \end{figure}
