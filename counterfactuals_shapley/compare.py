@@ -45,30 +45,30 @@ def compute(
 
     model = PPO.load(policy_path)
 
-    if not os.path.exists(".prediction_data.pkl"):
+    if not os.path.exists(".pred_data/.prediction_data.pkl"):
         X, y = get_future_data(
             args.env, env_kwargs, policy_path, agent=0, steps_per_cycle=10, seed=921
         )
-        with open(".prediction_data.pkl", "wb") as f:
+        with open(".pred_data/.prediction_data.pkl", "wb") as f:
             pickle.dump((X, y), f)
     else:
-        with open(".prediction_data.pkl", "rb") as f:
+        with open(".pred_data/.prediction_data.pkl", "rb") as f:
             X, y = pickle.load(f)
 
     if extras != "none":
-        if not os.path.exists(".prediction_data_action.pkl"):
+        if not os.path.exists(".pred_data/.prediction_data_action.pkl"):
             add_action(X, model)
-            with open(".prediction_data_action.pkl", "rb") as f:
+            with open(".pred_data/.prediction_data_action.pkl", "rb") as f:
                 X = pickle.load(f)
         else:
-            with open(".prediction_data_action.pkl", "rb") as f:
+            with open(".pred_data/.prediction_data_action.pkl", "rb") as f:
                 X = pickle.load(f)
         if extras == "one-hot":
             X = one_hot_action(X)
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".prediction_data_ig_{extras}_{env.metadata['name']}.pkl"
+            f".pred_data/.prediction_data_ig_{extras}_{env.metadata['name']}.pkl"
         ):
             policy_net = nn.Sequential(
                 *model.policy.mlp_extractor.policy_net,
@@ -100,7 +100,7 @@ def compute(
             )
         else:
             with open(
-                f".prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
+                f".pred_data/.prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -138,7 +138,7 @@ def compute(
 
     with torch.no_grad():
         criterion = nn.MSELoss()
-        if not os.path.exists(".prediction_test_data.pkl"):
+        if not os.path.exists(".pred_data/.prediction_test_data.pkl"):
             X_test, y_test = get_future_data(
                 args.env,
                 env_kwargs,
@@ -148,10 +148,10 @@ def compute(
                 steps_per_cycle=10,
                 seed=483927,
             )
-            with open(".prediction_test_data.pkl", "wb") as f:
+            with open(".pred_data/.prediction_test_data.pkl", "wb") as f:
                 pickle.dump((X_test, y_test), f)
         else:
-            with open(".prediction_test_data.pkl", "rb") as f:
+            with open(".pred_data/.prediction_test_data.pkl", "rb") as f:
                 X_test, y_test = pickle.load(f)
 
         if not extras == "none":
