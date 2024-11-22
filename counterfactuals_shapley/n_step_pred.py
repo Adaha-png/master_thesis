@@ -1,9 +1,11 @@
 import argparse
 import glob
 import multiprocessing
+import multiprocessing as mp
 import os
 import pickle
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 
 import matplotlib.pyplot as plt
@@ -15,12 +17,56 @@ from captum.attr import IntegratedGradients
 from captum_grads import create_baseline
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import shap_plot
+from shapley import kernel_explainer, shap_plot
 from sim_steps import sim_steps
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from torch import nn
 from tqdm import tqdm
+
+
+def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
+    # Ensure compatibility with multiple input types
+    if isinstance(X, np.ndarray):
+        X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
+    elif isinstance(X, list):
+        X = torch.tensor(X, device=device, dtype=torch.float32)
+
+    # Environment setup
+    env_name = env.metadata["name"]
+    env = ss.black_death_v3(env)
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
+    num_acts = env.action_space.n
+
+    # Function to get the SHAP values and construct new observation
+    def get_new_obs(obs, extras_type, model=None):
+        obs_np = obs.cpu().numpy()
+        if extras_type == "one-hot":
+            action_idx = torch.argmax(obs[-num_acts:]).item()
+            shap_values = expl[action_idx].shap_values(obs_np[:-num_acts])
+        elif extras_type == "action":
+            action_idx = obs[-1].item()
+            shap_values = expl[action_idx].shap_values(obs_np[:-1])
+        else:
+            action_idx, _ = model.predict(obs)
+            shap_values = expl[action_idx].shap_values(obs_np)
+
+        return np.concatenate((obs_np, shap_values))
+
+    if extras == "none" and not policy_path:
+        print("policy path required for extras = none")
+        exit(0)
+
+    model = PPO.load(policy_path) if (extras == "none") and policy_path else None
+
+    # Use list comprehension with tqdm for progress tracking
+    new_X = [get_new_obs(obs, extras, model) for obs in tqdm(X)]
+
+    if save:
+        with open(f".prediction_data_shap_{extras}_{env_name}.pkl", "wb") as f:
+            pickle.dump(new_X, f)
+    return new_X
 
 
 def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
@@ -47,7 +93,8 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
         ]
     elif extras == "action":
         new_X = [
-            np.array([*obs.cpu(), *ig(obs[:-1], target=obs[-1])[0].cpu()]) for obs in X
+            np.array([*obs.cpu(), *ig(obs[:-1], target=int(obs[-1]))[0].cpu()])
+            for obs in tqdm(X)
         ]
     else:
         if not policy_path:
@@ -55,8 +102,10 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
             exit(0)
         model = PPO.load(policy_path)
         new_X = [
-            np.array([*obs.cpu(), *ig(obs, target=model.predict(obs))[0].cpu()])
-            for obs in X
+            np.array(
+                [*obs.cpu(), *ig(obs, target=int(model.predict(obs.cpu())[0]))[0].cpu()]
+            )
+            for obs in tqdm(X)
         ]
     if save:
         with open(f".prediction_data_ig_{extras}_{env_name}.pkl", "wb") as f:
@@ -98,14 +147,7 @@ def one_hot_action(X):
     return new_X
 
 
-def future_sight(
-    env_name,
-    device,
-    net,
-    X,
-    y,
-    extras="none",
-):
+def future_sight(env_name, device, net, X, y, extras="none", explainer_extras="none"):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -184,6 +226,7 @@ def train_net(
     criterion = nn.MSELoss()
     optimizer = torch.optim.AdamW(net.parameters(), lr=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
+    scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer)
     # Training loop
     last_lr = scheduler.get_last_lr()
     print(f"lr = {last_lr}")
@@ -326,8 +369,8 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = "none"  # none, action or one-hot
-    explainer_extras = "ig"  # none, ig or shap
+    extras = "one-hot"  # none, action or one-hot
+    explainer_extras = "shap"  # none, ig or shap
 
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
@@ -386,10 +429,42 @@ if __name__ == "__main__":
                 method="gausslegendre",
                 return_convergence_delta=False,
             )
-            X = add_ig(X, ig_partial, env, device, extras=extras)
+            X = add_ig(
+                X, ig_partial, env, device, policy_path=policy_path, extras=extras
+            )
         else:
             with open(
                 f".prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
+                "rb",
+            ) as f:
+                X = pickle.load(f)
+    elif explainer_extras == "shap":
+        if not os.path.exists(
+            f".prediction_data_shap_{extras}_{env.metadata['name']}.pkl"
+        ):
+            tempenv = ss.black_death_v3(env)
+            tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+            tempenv = ss.concat_vec_envs_v1(
+                tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+            )
+            num_acts = tempenv.action_space.n
+
+            expl = [
+                kernel_explainer(env, policy_path, 0, i, device, seed=372894 * (i + 1))
+                for i in range(num_acts)
+            ]
+
+            X = add_shap(
+                X,
+                expl,
+                env,
+                device,
+                policy_path=policy_path,
+                extras=extras,
+            )
+        else:
+            with open(
+                f".prediction_data_shap_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -412,6 +487,7 @@ if __name__ == "__main__":
             X,
             y,
             extras=extras,
+            explainer_extras=explainer_extras,
         )
         net.eval()
     else:
@@ -473,7 +549,32 @@ if __name__ == "__main__":
                 return_convergence_delta=False,
             )
 
-            X_test = add_ig(X_test, ig_partial, env, device, extras=extras, save=False)
+            X_test = add_ig(
+                X_test,
+                ig_partial,
+                env,
+                device,
+                policy_path=policy_path,
+                extras=extras,
+                save=False,
+            )
+        elif explainer_extras == "shap":
+            tempenv = ss.black_death_v3(env)
+            tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+            tempenv = ss.concat_vec_envs_v1(
+                tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+            )
+            num_acts = tempenv.action_space.n
+
+            X_test = add_shap(
+                X_test,
+                env_fn,
+                env_kwargs,
+                device,
+                policy_path=policy_path,
+                extras=extras,
+                save=False,
+            )
 
         X_test = torch.Tensor(np.array(X_test)).to(device)
         y_test = torch.Tensor(np.array(y_test)).to(device)
