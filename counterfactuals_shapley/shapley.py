@@ -16,20 +16,21 @@ from stable_baselines3 import PPO
 from tqdm import tqdm
 
 
-def pred(model, act, obs):
-    obs = torch.tensor(obs).unsqueeze(0)
-    vals = torch.softmax(
-        model.policy.action_net(model.policy.mlp_extractor.policy_net(obs)), 2
-    )
-    vals = vals.detach().numpy()[0, :, act]
-    print(vals)
+def pred(model, act, device, obs):
+    obs = torch.tensor(obs).unsqueeze(0).to(device)
+    action_net = model.policy.action_net.to(device)
+    policy_net = model.policy.mlp_extractor.policy_net.to(device)
+    vals = torch.softmax(action_net(policy_net(obs)), 2)
+    vals = vals.cpu().detach().numpy()[0, :, act]
     return vals
 
 
-def kernel_explainer(env, policy, agent, action, seed=None):
-    X, _ = get_data(env, policy, agent=agent, total_steps=1000, seed=seed)
+def kernel_explainer(env, policy, agent, action, device, seed=None):
+    X, _ = get_data(
+        env, policy, agent=agent, total_steps=100, steps_per_cycle=25, seed=seed
+    )
     model = PPO.load(policy)
-    explainer = shap.KernelExplainer(partial(pred, model, action), shap.kmeans(X, 100))
+    explainer = shap.KernelExplainer(partial(pred, model, action, device), X)
     return explainer
 
 
@@ -98,7 +99,7 @@ def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=
     observations = []
     actions = []
     num_cycles = total_steps // steps_per_cycle
-    for i in tqdm(range(num_cycles)):
+    for i in range(num_cycles):
         if seed:
             step_results = sim_steps(
                 env, policy, num_steps=steps_per_cycle, seed=seed + i + 200

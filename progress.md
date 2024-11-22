@@ -11,8 +11,6 @@
 
 ## More on shapley
 
-* not intended for temporal
-
 
 # Worklog
 ## Week 39
@@ -107,38 +105,24 @@ Future predictor
 * gets decent results
 * shap and ig on these models
 
+
+## week 47
+
+Future predictor
+
+* takes ig, helps a bit on top of one hot
+* should take shap as well
+* compare different loss curves and distance measures
+
 # TODO
 
-## shap
-
-* make custom shap plot function
 
 ## sim\_steps
 
-* [x] make sim\_steps accept seed
+* make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
 
-* [ ] make sim\_steps accept initial observation (might need to make an env wrapper, will probably be a lot of work)
-
-* [ ] work with continous action space
-
-## feature importance for found actions
-
-* [?] surragate shap
-
-* [x] kernel shap
-
-* feature permutation?
-
-## major changes
-
-* environment reset function overhaul
-
-* ~~supersuit reward fix, doesnt respect local reward~~ *nvm, it works*
 
 ## sparse rewards
 
-* new methods for action importance in sparse reward environments
+* new methods for critical states in sparse reward environments, probably big q value difference (logits, not softmax)
 
-## misc
-
-* try different model architectures
