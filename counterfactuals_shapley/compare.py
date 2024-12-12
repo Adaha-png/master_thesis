@@ -174,62 +174,79 @@ def compute(
 
     with torch.no_grad():
         criterion = nn.MSELoss()
-        if not os.path.exists(".pred_data/.prediction_test_data.pkl"):
-            X_test, y_test = get_future_data(
-                args.env,
-                env_kwargs,
-                policy_path,
-                agent=0,
-                amount_cycles=10000,
-                steps_per_cycle=10,
-                seed=483927,
-            )
-            with open(".pred_data/.prediction_test_data.pkl", "wb") as f:
-                pickle.dump((X_test, y_test), f)
-        else:
-            with open(".pred_data/.prediction_test_data.pkl", "rb") as f:
+
+        if os.path.exists(
+            f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl"
+        ):
+            with open(
+                f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
+                "rb",
+            ) as f:
                 X_test, y_test = pickle.load(f)
-
-        if not extras == "none":
-            X_test = add_action(X_test, model, save=False)
-            if extras == "one-hot":
-                X_test = one_hot_action(X_test)
-
-        if explainer_extras == "ig":
-            policy_net = nn.Sequential(
-                *model.policy.mlp_extractor.policy_net,
-                model.policy.action_net,
-                nn.Softmax(),
-            ).to(device)
-
-            ig = IntegratedGradients(policy_net)
-            if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
-                baseline = create_baseline(
-                    env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+        else:
+            print("Test data not found, creating...")
+            if not os.path.exists(".pred_data/.prediction_test_data.pkl"):
+                X_test, y_test = get_future_data(
+                    args.env,
+                    env_kwargs,
+                    policy_path,
+                    agent=0,
+                    amount_cycles=10000,
+                    steps_per_cycle=10,
+                    seed=483927,
                 )
-                torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
+                with open(".pred_data/.prediction_test_data.pkl", "wb") as f:
+                    pickle.dump((X_test, y_test), f)
             else:
-                baseline = torch.load(
-                    f".baseline_future_{env.metadata['name']}.pt",
-                    map_location=device,
-                    weights_only=True,
-                )
-            ig_partial = partial(
-                ig.attribute,
-                baselines=baseline,
-                method="gausslegendre",
-                return_convergence_delta=False,
-            )
+                with open(".pred_data/.prediction_test_data.pkl", "rb") as f:
+                    X_test, y_test = pickle.load(f)
 
-            X_test = add_ig(
-                X_test,
-                ig_partial,
-                env,
-                device,
-                policy_path=policy_path,
-                extras=extras,
-                save=False,
-            )
+            if not extras == "none":
+                X_test = add_action(X_test, model, save=False)
+                if extras == "one-hot":
+                    X_test = one_hot_action(X_test)
+
+            if explainer_extras == "ig":
+                policy_net = nn.Sequential(
+                    *model.policy.mlp_extractor.policy_net,
+                    model.policy.action_net,
+                    nn.Softmax(),
+                ).to(device)
+
+                ig = IntegratedGradients(policy_net)
+                if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
+                    baseline = create_baseline(
+                        env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                    )
+                    torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
+                else:
+                    baseline = torch.load(
+                        f".baseline_future_{env.metadata['name']}.pt",
+                        map_location=device,
+                        weights_only=True,
+                    )
+                ig_partial = partial(
+                    ig.attribute,
+                    baselines=baseline,
+                    method="gausslegendre",
+                    return_convergence_delta=False,
+                )
+
+                X_test = add_ig(
+                    X_test,
+                    ig_partial,
+                    env,
+                    device,
+                    policy_path=policy_path,
+                    extras=extras,
+                    save=False,
+                )
+
+            with open(
+                f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
+                "wb",
+            ) as f:
+                pickle.dump((X_test, y_test), f)
 
         X_test = torch.Tensor(numpyfy(X_test)).to(device)
         y_test = torch.Tensor(numpyfy(y_test)).to(device)
