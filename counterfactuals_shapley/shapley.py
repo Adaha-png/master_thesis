@@ -27,10 +27,12 @@ def pred(model, act, device, obs):
 
 def kernel_explainer(env, policy, agent, action, device, seed=None):
     X, _ = get_data(
-        env, policy, agent=agent, total_steps=100, steps_per_cycle=25, seed=seed
+        env, policy, agent=agent, total_steps=10000, steps_per_cycle=25, seed=seed
     )
     model = PPO.load(policy)
-    explainer = shap.KernelExplainer(partial(pred, model, action, device), X)
+    explainer = shap.KernelExplainer(
+        partial(pred, model, action, device), shap.kmeans(X, 200)
+    )
     return explainer
 
 
@@ -99,7 +101,7 @@ def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=
     observations = []
     actions = []
     num_cycles = total_steps // steps_per_cycle
-    for i in range(num_cycles):
+    for i in tqdm(range(num_cycles), desc="Simulating cycles"):
         if seed:
             step_results = sim_steps(
                 env, policy, num_steps=steps_per_cycle, seed=seed + i + 200
