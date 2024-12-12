@@ -6,19 +6,21 @@ import random
 from functools import partial
 
 import numpy as np
+import supersuit as ss
 import torch
 from captum.attr import IntegratedGradients
 from captum_grads import create_baseline
 from n_step_pred import (
     add_action,
     add_ig,
+    add_shap,
     future_sight,
     get_future_data,
     one_hot_action,
 )
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import shap_plot
+from shapley import kernel_explainer, shap_plot
 from stable_baselines3 import PPO
 from torch import nn
 
@@ -101,6 +103,38 @@ def compute(
         else:
             with open(
                 f".pred_data/.prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
+                "rb",
+            ) as f:
+                X = pickle.load(f)
+
+    elif explainer_extras == "shap":
+        if not os.path.exists(
+            f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl"
+        ):
+            tempenv = ss.black_death_v3(env)
+            tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+            tempenv = ss.concat_vec_envs_v1(
+                tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+            )
+            num_acts = tempenv.action_space.n
+
+            expl = [
+                kernel_explainer(env, policy_path, 0, i, device, seed=372894 * (i + 1))
+                for i in range(num_acts)
+            ]
+
+            X = add_shap(
+                X,
+                expl,
+                env,
+                device,
+                policy_path=policy_path,
+                extras=extras,
+            )
+
+        else:
+            with open(
+                f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
