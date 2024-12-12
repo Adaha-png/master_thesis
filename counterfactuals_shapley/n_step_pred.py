@@ -60,8 +60,7 @@ def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
 
     model = PPO.load(policy_path) if (extras == "none") and policy_path else None
 
-    # Use list comprehension with tqdm for progress tracking
-    new_X = [get_new_obs(obs, extras, model) for obs in tqdm(X)]
+    new_X = [get_new_obs(obs, extras, model) for obs in tqdm(X, desc="Adding shapley")]
 
     if save:
         with open(
@@ -91,12 +90,12 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
                     *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0].cpu(),
                 ]
             )
-            for obs in tqdm(X)
+            for obs in tqdm(X, desc="Adding ig")
         ]
     elif extras == "action":
         new_X = [
             np.array([*obs.cpu(), *ig(obs[:-1], target=int(obs[-1]))[0].cpu()])
-            for obs in tqdm(X)
+            for obs in tqdm(X, desc="Adding ig")
         ]
     else:
         if not policy_path:
@@ -107,7 +106,7 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
             np.array(
                 [*obs.cpu(), *ig(obs, target=int(model.predict(obs.cpu())[0]))[0].cpu()]
             )
-            for obs in tqdm(X)
+            for obs in tqdm(X, desc="Adding ig")
         ]
     if save:
         with open(f".pred_data/.prediction_data_ig_{extras}_{env_name}.pkl", "wb") as f:
