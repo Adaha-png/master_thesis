@@ -15,12 +15,12 @@ from pettingzoo.mpe import simple_spread_v3
 from sim_steps import sim_steps, sim_steps_partial
 from sklearn.model_selection import train_test_split
 
-from custom_env_utils import par_env_with_seed
+from wrappers import numpyfy, par_env_with_seed
 
 
 def action_difference(sequence1, *actions_list2):
     # Extract values associated with the key "action" from both lists
-    actions_list1 = np.array([val["action"] for val in sequence1]).flatten()
+    actions_list1 = numpyfy([val["action"] for val in sequence1]).flatten()
     # Initialize a counter for differing values
 
     actions_list2 = np.floor(actions_list2)
@@ -74,8 +74,8 @@ def counterfactuals(env, sequence: List[Dict]):
         tournament_prob=0.85,
     )
 
-    individuals = np.array(evolution.evolve())
-    ind_plotting = np.array(
+    individuals = numpyfy(evolution.evolve())
+    ind_plotting = numpyfy(
         [
             [-action_objective(*i.features), reward_objective(*i.features)]
             for i in individuals
@@ -100,7 +100,7 @@ def counterfactuals(env, sequence: List[Dict]):
 def reward_difference_with_model(
     env, policy, sequence1, n_actions, seed, *chosen_actions
 ):
-    if sum(np.array(chosen_actions) >= 0) - 1 == 0:
+    if sum(numpyfy(chosen_actions) >= 0) - 1 == 0:
         return 0
 
     index = min(int(list(chosen_actions).pop(0)), len(sequence1) - 1)
@@ -139,7 +139,7 @@ def reward_difference_with_model(
 
 
 def action_difference_with_model(*actions):
-    return sum(np.array(actions) >= 0) - 1
+    return sum(numpyfy(actions) >= 0) - 1
 
 
 def counterfactuals_with_model(env, sequence, policy, seed):
@@ -169,8 +169,8 @@ def counterfactuals_with_model(env, sequence, policy, seed):
         tournament_prob=0.9,
     )
 
-    individuals = np.array(evolution.evolve())
-    # ind_plotting = np.array(
+    individuals = numpyfy(evolution.evolve())
+    # ind_plotting = numpyfy(
     #     [
     #         [action_objective(*i.features), -reward_objective(*i.features)]
     #         if reward_objective(*i.features) != 0

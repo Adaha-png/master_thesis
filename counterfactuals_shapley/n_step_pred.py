@@ -1,11 +1,9 @@
 import argparse
 import glob
 import multiprocessing
-import multiprocessing as mp
 import os
 import pickle
 import random
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 
 import matplotlib.pyplot as plt
@@ -23,6 +21,8 @@ from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from torch import nn
 from tqdm import tqdm
+
+from wrappers import numpyfy
 
 
 def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
@@ -84,7 +84,7 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
 
     if extras == "one-hot":
         new_X = [
-            np.array(
+            numpyfy(
                 [
                     *obs.cpu(),
                     *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0].cpu(),
@@ -94,7 +94,7 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
         ]
     elif extras == "action":
         new_X = [
-            np.array([*obs.cpu(), *ig(obs[:-1], target=int(obs[-1]))[0].cpu()])
+            numpyfy([*obs.cpu(), *ig(obs[:-1], target=int(obs[-1]))[0].cpu()])
             for obs in tqdm(X, desc="Adding ig")
         ]
     else:
@@ -103,7 +103,7 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
             exit(0)
         model = PPO.load(policy_path)
         new_X = [
-            np.array(
+            numpyfy(
                 [*obs.cpu(), *ig(obs, target=int(model.predict(obs.cpu())[0]))[0].cpu()]
             )
             for obs in tqdm(X, desc="Adding ig")
@@ -134,7 +134,7 @@ def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, age
 
 
 def add_action(X, model, save=True):
-    new_X = [np.array([*obs, model.predict(obs)[0]]) for obs in X]
+    new_X = [numpyfy([*obs, model.predict(obs)[0]]) for obs in X]
     if save:
         with open(".pred_data/.prediction_data_action.pkl", "wb") as f:
             pickle.dump(new_X, f)
@@ -142,9 +142,9 @@ def add_action(X, model, save=True):
 
 
 def one_hot_action(X):
-    X = np.array(X)
+    X = numpyfy(X)
     num = round(max(X[:, -1]) - min(X[:, -1]) + 1)
-    new_X = np.array([[*obs[:-1], *np.eye(num)[round(obs[-1])]] for obs in X])
+    new_X = numpyfy([[*obs[:-1], *np.eye(num)[round(obs[-1])]] for obs in X])
     return new_X
 
 
@@ -218,10 +218,10 @@ def train_net(
     explainer_extras="none",
 ):
     # Convert data to PyTorch tensors
-    X_train = torch.tensor(np.array(X_train), dtype=torch.float32).to(device)
-    y_train = torch.tensor(np.array(y_train), dtype=torch.float32).to(device)
-    X_test = torch.tensor(np.array(X_test), dtype=torch.float32).to(device)
-    y_test = torch.tensor(np.array(y_test), dtype=torch.float32).to(device)
+    X_train = torch.tensor(numpyfy(X_train), dtype=torch.float32).to(device)
+    y_train = torch.tensor(numpyfy(y_train), dtype=torch.float32).to(device)
+    X_test = torch.tensor(numpyfy(X_test), dtype=torch.float32).to(device)
+    y_test = torch.tensor(numpyfy(y_test), dtype=torch.float32).to(device)
 
     # Define loss function and optimizer
     criterion = nn.MSELoss()
@@ -577,14 +577,14 @@ if __name__ == "__main__":
                 save=False,
             )
 
-        X_test = torch.Tensor(np.array(X_test)).to(device)
-        y_test = torch.Tensor(np.array(y_test)).to(device)
+        X_test = torch.Tensor(numpyfy(X_test)).to(device)
+        y_test = torch.Tensor(numpyfy(y_test)).to(device)
         test_outputs = net(X_test)
         test_loss = criterion(test_outputs, y_test).item()
         print(test_loss)
 
     if not isinstance(X, np.ndarray):
-        X = np.array(X)
+        X = numpyfy(X)
 
     coordinate = 0
     coordinate_names = ["x", "y"]

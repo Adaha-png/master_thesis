@@ -14,7 +14,7 @@ from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from custom_env_utils import par_env_with_seed
+from wrappers import par_env_with_seed
 
 
 def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):

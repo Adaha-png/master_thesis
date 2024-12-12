@@ -24,12 +24,14 @@ from shapley import kernel_explainer, shap_plot
 from stable_baselines3 import PPO
 from torch import nn
 
+from wrappers import numpyfy
+
 
 def distance(predicted, y):
     if not isinstance(predicted, np.ndarray):
-        predicted = np.array(predicted)
+        predicted = numpyfy(predicted)
     if not isinstance(y, np.ndarray):
-        y = np.array(y)
+        y = numpyfy(y)
     return np.linalg.norm(predicted - y, axis=1)
 
 
@@ -229,8 +231,8 @@ def compute(
                 save=False,
             )
 
-        X_test = torch.Tensor(np.array(X_test)).to(device)
-        y_test = torch.Tensor(np.array(y_test)).to(device)
+        X_test = torch.Tensor(numpyfy(X_test)).to(device)
+        y_test = torch.Tensor(numpyfy(y_test)).to(device)
         test_outputs = net(X_test)
 
         test_loss = criterion(test_outputs, y_test).item()
@@ -247,7 +249,7 @@ def compute(
 
 def make_plots(explainer, X, filename):
     if not isinstance(X, np.ndarray):
-        X = np.array(X)
+        X = numpyfy(X)
 
     coordinate = 0
     coordinate_names = ["x", "y"]

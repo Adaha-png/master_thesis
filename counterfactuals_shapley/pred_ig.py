@@ -17,6 +17,8 @@ from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from torch import nn
 
+from wrappers import numpyfy
+
 
 def ig_extract_future(
     env,
@@ -73,7 +75,7 @@ def ig_extract_future(
         attributions = attributions.squeeze().detach().numpy()
     sorted_indices = np.argsort(np.abs(attributions))
     attributions = attributions[sorted_indices]
-    feature_names = np.array(feature_names)[sorted_indices]
+    feature_names = numpyfy(feature_names)[sorted_indices]
 
     print(
         f"Coordinate: {coordinates[coordinate]}, Value:{net.forward(obs)[0,coordinate]}"
