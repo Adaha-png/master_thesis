@@ -1,5 +1,6 @@
 import argparse
 import glob
+import multiprocessing
 import os
 import pickle
 import random
@@ -20,19 +21,56 @@ from n_step_pred import (
 )
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import kernel_explainer, shap_plot
+from shapley import kernel_explainer
+from sim_steps import sim_steps
+from sklearn.metrics import precision_recall_fscore_support
 from stable_baselines3 import PPO
 from torch import nn
 
 from wrappers import numpyfy
 
 
-def distance(predicted, y):
-    if not isinstance(predicted, np.ndarray):
-        predicted = numpyfy(predicted)
-    if not isinstance(y, np.ndarray):
-        y = numpyfy(y)
-    return np.linalg.norm(predicted - y, axis=1)
+def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
+    env_fn = simple_spread_v3 if env_name == "spread" else knights_archers_zombies_v10
+    env = env_fn.parallel_env(**env_kwargs)
+    policy = PPO.load(policy_path)
+
+    seq = sim_steps(env, policy, num_steps=steps_per_cycle, seed=seed)
+    X = seq[0]["observation"][agent]
+    Y = seq[-1]["observation"][agent][2:4]  # Position of agent after 10 steps
+    return X, Y
+
+
+def get_crit_data(
+    env_name,
+    env_kwargs,
+    policy_path,
+    agent=0,
+    amount_cycles=10000,
+    steps_per_cycle=10,
+    seed=0,
+):
+    X = []
+    Y = []
+
+    multiprocessing.set_start_method("spawn", force=True)
+    pool = multiprocessing.Pool()
+
+    sim_func = partial(
+        simulate_cycle, env_name, env_kwargs, policy_path, steps_per_cycle, agent=agent
+    )
+
+    results = pool.starmap(sim_func, [(seed + c,) for c in range(amount_cycles)])
+
+    pool.close()
+    pool.join()
+
+    for result in results:
+        x, y = result
+        X.append(x)
+        Y.append(y)
+
+    return X, Y
 
 
 def compute(
@@ -42,9 +80,6 @@ def compute(
     extras="none",
     explainer_extras="none",
 ):
-    assert extras in ["none", "one-hot", "action"]
-    assert explainer_extras in ["none", "ig", "shap"]
-
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
     elif extras == "action":
@@ -52,30 +87,30 @@ def compute(
 
     model = PPO.load(policy_path)
 
-    if not os.path.exists(".pred_data/.prediction_data.pkl"):
-        X, y = get_future_data(
+    if not os.path.exists(".pred_data/.prediction_data_crit.pkl"):
+        X, y = get_crit_data(
             args.env, env_kwargs, policy_path, agent=0, steps_per_cycle=10, seed=921
         )
-        with open(".pred_data/.prediction_data.pkl", "wb") as f:
+        with open(".pred_data/.prediction_data_crit.pkl", "wb") as f:
             pickle.dump((X, y), f)
     else:
-        with open(".pred_data/.prediction_data.pkl", "rb") as f:
+        with open(".pred_data/.prediction_data_crit.pkl", "rb") as f:
             X, y = pickle.load(f)
 
     if extras != "none":
-        if not os.path.exists(".pred_data/.prediction_data_action.pkl"):
+        if not os.path.exists(".pred_data/.prediction_data_crit_action.pkl"):
             add_action(X, model)
-            with open(".pred_data/.prediction_data_action.pkl", "rb") as f:
+            with open(".pred_data/.prediction_data_crit_action.pkl", "rb") as f:
                 X = pickle.load(f)
         else:
-            with open(".pred_data/.prediction_data_action.pkl", "rb") as f:
+            with open(".pred_data/.prediction_data_crit_action.pkl", "rb") as f:
                 X = pickle.load(f)
         if extras == "one-hot":
             X = one_hot_action(X)
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".pred_data/.prediction_data_ig_{extras}_{env.metadata['name']}.pkl"
+            f".pred_data/.prediction_data_crit_ig_{extras}_{env.metadata['name']}.pkl"
         ):
             policy_net = nn.Sequential(
                 *model.policy.mlp_extractor.policy_net,
@@ -107,14 +142,14 @@ def compute(
             )
         else:
             with open(
-                f".pred_data/.prediction_data_ig_{extras}_{env.metadata['name']}.pkl",
+                f".pred_data/.prediction_data_crit_ig_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl"
+            f".pred_data/.prediction_data_crit_shap_{extras}_{env.metadata['name']}.pkl"
         ):
             tempenv = ss.black_death_v3(env)
             tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
@@ -139,7 +174,7 @@ def compute(
 
         else:
             with open(
-                f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl",
+                f".pred_data/.prediction_data_crit_shap_{extras}_{env.metadata['name']}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -153,7 +188,7 @@ def compute(
     ).to(device)
 
     if not os.path.exists(
-        f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt"
+        f".pred_models/pred_model_crit_{args.env}_{extras}_{explainer_extras}.pt"
     ):
         net = future_sight(
             args.env,
@@ -168,7 +203,7 @@ def compute(
     else:
         net.load_state_dict(
             torch.load(
-                f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt",
+                f".pred_models/pred_model_crit_{args.env}_{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
@@ -179,16 +214,16 @@ def compute(
         criterion = nn.MSELoss()
 
         if os.path.exists(
-            f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl"
+            f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl"
         ):
             with open(
-                f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
+                f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
         else:
             print("Test data not found, creating...")
-            if not os.path.exists(".pred_data/.prediction_test_data.pkl"):
+            if not os.path.exists(".pred_data/.prediction_test_data_crit.pkl"):
                 X_test, y_test = get_future_data(
                     args.env,
                     env_kwargs,
@@ -198,10 +233,10 @@ def compute(
                     steps_per_cycle=10,
                     seed=483927,
                 )
-                with open(".pred_data/.prediction_test_data.pkl", "wb") as f:
+                with open(".pred_data/.prediction_test_data_crit.pkl", "wb") as f:
                     pickle.dump((X_test, y_test), f)
             else:
-                with open(".pred_data/.prediction_test_data.pkl", "rb") as f:
+                with open(".pred_data/.prediction_test_data_crit.pkl", "rb") as f:
                     X_test, y_test = pickle.load(f)
 
             if not extras == "none":
@@ -246,7 +281,7 @@ def compute(
                 )
 
             with open(
-                f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
+                f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)
@@ -260,27 +295,14 @@ def compute(
             f"Loss on test set for {extras} and {explainer_extras} extras: {test_loss:.4f}"
         )
 
-        distances = distance(test_outputs.cpu(), y_test.cpu())
-        avg_distance = np.mean(distances)
-        max_distance = np.max(distances)
+        predicted_labels = torch.round(test_outputs)
 
-    return (test_loss, avg_distance, max_distance)
+        accuracy = torch.sum(predicted_labels == y_test) / len(y_test)
+        precision, recall, f_score, support = precision_recall_fscore_support(
+            y_test, test_outputs
+        )
 
-
-def make_plots(explainer, X, filename):
-    if not isinstance(X, np.ndarray):
-        X = numpyfy(X)
-
-    coordinate = 0
-    coordinate_names = ["x", "y"]
-
-    shap_plot(
-        X,
-        explainer,
-        filename,
-        feature_names,
-        coordinate_names[coordinate],
-    )
+    return (test_loss, accuracy, precision, recall, f_score, support)
 
 
 if __name__ == "__main__":
@@ -377,7 +399,7 @@ if __name__ == "__main__":
     extras = ["none", "action", "one-hot"]
     explainer_extras = ["none", "ig", "shap"]
 
-    table = np.zeros((3, len(extras), len(explainer_extras)))
+    table = np.zeros((6, len(extras), len(explainer_extras)))
 
     for i, extra in enumerate(extras):
         for j, expl in enumerate(explainer_extras):
