@@ -15,6 +15,8 @@ from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from tqdm import tqdm
 
+from wrappers import numpyfy
+
 
 def pred(model, act, device, obs):
     obs = torch.tensor(obs).unsqueeze(0).to(device)
@@ -53,7 +55,7 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     mean_shap_values = np.mean(np.abs(shap_values), axis=0)
     sorted_indices = np.argsort(mean_shap_values)
 
-    sorted_feature_names = np.array(feature_names)[sorted_indices]
+    sorted_feature_names = numpyfy(feature_names)[sorted_indices]
 
     # Flatten SHAP values and corresponding feature values for coloring
     flattened_shap_values = shap_values[:, sorted_indices].flatten()
@@ -115,7 +117,7 @@ def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=
             if obs is not None and act is not None:
                 actions.append(act[agent])
                 observations.append(obs[agent])
-    return np.array(observations), np.array(actions)
+    return numpyfy(observations), numpyfy(actions)
 
 
 if __name__ == "__main__":

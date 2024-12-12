@@ -1,5 +1,8 @@
 from types import MethodType
 
+import numpy as np
+import torch
+
 
 def par_env_with_seed(env, seed):
     # pettingzoo/gymnasium/supersuit compatibility, use this function if you want seeded env
@@ -26,3 +29,10 @@ def par_env_with_seed(env, seed):
     env.seed(seed)
 
     return env
+
+
+def numpyfy(X):
+    if isinstance(X, torch.Tensor):
+        return np.array(X.cpu())
+    else:
+        return np.array(X)
