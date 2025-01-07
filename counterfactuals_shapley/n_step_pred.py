@@ -47,7 +47,7 @@ def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
             shap_values = expl[action_idx].shap_values(obs_np[:-num_acts])
         elif extras_type == "action":
             action_idx = obs[-1].item()
-            shap_values = expl[action_idx].shap_values(obs_np[:-1])
+            shap_values = expl[int(action_idx)].shap_values(obs_np[:-1])
         else:
             action_idx, _ = model.predict(numpyfy(obs))
             shap_values = expl[action_idx].shap_values(obs_np)
