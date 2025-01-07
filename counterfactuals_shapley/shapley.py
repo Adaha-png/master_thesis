@@ -18,12 +18,18 @@ from tqdm import tqdm
 from wrappers import numpyfy
 
 
-def pred(model, act, device, obs):
+def pred(model, act, device, obs, softmax=True):
     obs = torch.tensor(obs).unsqueeze(0).to(device)
     action_net = model.policy.action_net.to(device)
     policy_net = model.policy.mlp_extractor.policy_net.to(device)
-    vals = torch.softmax(action_net(policy_net(obs)), 2)
-    vals = vals.cpu().detach().numpy()[0, :, act]
+    if softmax:
+        vals = torch.softmax(action_net(policy_net(obs)), 2)
+    else:
+        vals = action_net(policy_net(obs))
+    if act == None:
+        vals = vals.unsqueeze(0).cpu().detach().numpy()
+    else:
+        vals = vals.cpu().detach().numpy()[0, :, act]
     return vals
 
 
