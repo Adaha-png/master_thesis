@@ -21,24 +21,39 @@ from n_step_pred import (
 )
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import kernel_explainer
+from shapley import kernel_explainer, pred
 from sim_steps import sim_steps
 from sklearn.metrics import precision_recall_fscore_support
 from stable_baselines3 import PPO
 from torch import nn
+from tqdm import tqdm
 
 from wrappers import numpyfy
 
 
-def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
+def find_crit_state(policy, seq, device):
+    pred_func = partial(pred, policy, None, device, softmax=False)
+    max_diff = np.max(
+        [
+            np.max(pred_func(step["observation"]))
+            - np.min(pred_func(step["observation"]))
+            for step in seq
+        ]
+    )
+    return max_diff
+
+
+def simulate_cycle(
+    env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent, device
+):
     env_fn = simple_spread_v3 if env_name == "spread" else knights_archers_zombies_v10
     env = env_fn.parallel_env(**env_kwargs)
     policy = PPO.load(policy_path)
 
     seq = sim_steps(env, policy, num_steps=steps_per_cycle, seed=seed)
     X = seq[0]["observation"][agent]
-    Y = seq[-1]["observation"][agent][2:4]  # Position of agent after 10 steps
-    return X, Y
+    max_diff = find_crit_state(policy, seq, device)
+    return X, max_diff
 
 
 def get_crit_data(
@@ -51,24 +66,32 @@ def get_crit_data(
     seed=0,
 ):
     X = []
-    Y = []
+    diffs = []
 
-    multiprocessing.set_start_method("spawn", force=True)
-    pool = multiprocessing.Pool()
+    # Iterate over the number of cycles instead of using multiprocessing
+    for c in tqdm(range(amount_cycles)):
+        # Call simulate_cycle directly
+        result = simulate_cycle(
+            env_name,
+            env_kwargs,
+            policy_path,
+            steps_per_cycle,
+            agent=agent,
+            device=device,
+            seed=seed + c,
+        )
 
-    sim_func = partial(
-        simulate_cycle, env_name, env_kwargs, policy_path, steps_per_cycle, agent=agent
-    )
-
-    results = pool.starmap(sim_func, [(seed + c,) for c in range(amount_cycles)])
-
-    pool.close()
-    pool.join()
-
-    for result in results:
-        x, y = result
+        x, diff = result
         X.append(x)
-        Y.append(y)
+        diffs.append(diff)
+
+    # Convert diffs to a numpy array for easy quantile computation
+    diffs = np.array(diffs)
+
+    threshold = np.quantile(diffs, 0.75)
+
+    # Create Y array with 1s for the highest quantile and 0s otherwise
+    Y = (diffs > threshold).astype(int)
 
     return X, Y
 
@@ -198,6 +221,7 @@ def compute(
             y,
             extras=extras,
             explainer_extras=explainer_extras,
+            criterion=nn.CrossEntropyLoss(),
         )
         net.eval()
     else:
@@ -211,7 +235,7 @@ def compute(
         net.eval()
 
     with torch.no_grad():
-        criterion = nn.MSELoss()
+        criterion = nn.CrossEntropyLoss()
 
         if os.path.exists(
             f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl"
@@ -278,6 +302,30 @@ def compute(
                     policy_path=policy_path,
                     extras=extras,
                     save=False,
+                )
+
+            elif explainer_extras == "shap":
+                tempenv = ss.black_death_v3(env)
+                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+                tempenv = ss.concat_vec_envs_v1(
+                    tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+                )
+                num_acts = tempenv.action_space.n
+
+                expl = [
+                    kernel_explainer(
+                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                    )
+                    for i in range(num_acts)
+                ]
+
+                X_test = add_shap(
+                    X_test,
+                    expl,
+                    env,
+                    device,
+                    policy_path=policy_path,
+                    extras=extras,
                 )
 
             with open(
