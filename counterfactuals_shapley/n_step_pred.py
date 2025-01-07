@@ -148,7 +148,16 @@ def one_hot_action(X):
     return new_X
 
 
-def future_sight(env_name, device, net, X, y, extras="none", explainer_extras="none"):
+def future_sight(
+    env_name,
+    device,
+    net,
+    X,
+    y,
+    extras="none",
+    explainer_extras="none",
+    criterion=None,
+):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -163,6 +172,7 @@ def future_sight(env_name, device, net, X, y, extras="none", explainer_extras="n
         epochs=200,
         extras=extras,
         explainer_extras=explainer_extras,
+        criterion=criterion,
     )
 
     os.makedirs(".pred_models", exist_ok=True)
@@ -216,6 +226,7 @@ def train_net(
     batch_size=64,
     extras="none",
     explainer_extras="none",
+    criterion=None,
 ):
     # Convert data to PyTorch tensors
     X_train = torch.tensor(numpyfy(X_train), dtype=torch.float32).to(device)
@@ -224,7 +235,9 @@ def train_net(
     y_test = torch.tensor(numpyfy(y_test), dtype=torch.float32).to(device)
 
     # Define loss function and optimizer
-    criterion = nn.MSELoss()
+    if not criterion:
+        criterion = nn.MSELoss()
+
     optimizer = torch.optim.AdamW(net.parameters(), lr=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
     scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer)
