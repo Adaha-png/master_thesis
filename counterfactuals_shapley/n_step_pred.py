@@ -238,9 +238,8 @@ def train_net(
     if not criterion:
         criterion = nn.MSELoss()
 
-    optimizer = torch.optim.AdamW(net.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=0.1)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
-    scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer)
     # Training loop
     last_lr = scheduler.get_last_lr()
     print(f"lr = {last_lr}")
