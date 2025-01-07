@@ -69,7 +69,7 @@ def get_crit_data(
     diffs = []
 
     # Iterate over the number of cycles instead of using multiprocessing
-    for c in tqdm(range(amount_cycles)):
+    for c in tqdm(range(9900, amount_cycles)):
         # Call simulate_cycle directly
         result = simulate_cycle(
             env_name,
@@ -92,7 +92,6 @@ def get_crit_data(
 
     # Create Y array with 1s for the highest quantile and 0s otherwise
     Y = (diffs > threshold).astype(int)
-
     return X, Y
 
 
@@ -202,13 +201,22 @@ def compute(
             ) as f:
                 X = pickle.load(f)
 
-    net = nn.Sequential(
-        nn.Linear(len(X[0]), 64),
-        nn.Tanh(),
-        nn.Linear(64, 64),
-        nn.Tanh(),
-        nn.Linear(64, len(y[0])),
-    ).to(device)
+    try:
+        net = nn.Sequential(
+            nn.Linear(len(X[0]), 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh(),
+            nn.Linear(64, len(y[0])),
+        ).to(device)
+    except TypeError:
+        net = nn.Sequential(
+            nn.Linear(len(X[0]), 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh(),
+            nn.Linear(64, 1),
+        ).to(device)
 
     if not os.path.exists(
         f".pred_models/pred_model_crit_{args.env}_{extras}_{explainer_extras}.pt"

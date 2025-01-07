@@ -229,10 +229,16 @@ def train_net(
     criterion=None,
 ):
     # Convert data to PyTorch tensors
-    X_train = torch.tensor(numpyfy(X_train), dtype=torch.float32).to(device)
-    y_train = torch.tensor(numpyfy(y_train), dtype=torch.float32).to(device)
-    X_test = torch.tensor(numpyfy(X_test), dtype=torch.float32).to(device)
-    y_test = torch.tensor(numpyfy(y_test), dtype=torch.float32).to(device)
+    if isinstance(criterion, nn.CrossEntropyLoss):
+        X_train = torch.tensor(numpyfy(X_train), dtype=torch.float32).to(device)
+        y_train = torch.tensor(numpyfy(y_train), dtype=torch.long).to(device)
+        X_test = torch.tensor(numpyfy(X_test), dtype=torch.float32).to(device)
+        y_test = torch.tensor(numpyfy(y_test), dtype=torch.long).to(device)
+    else:
+        X_train = torch.tensor(numpyfy(X_train), dtype=torch.float32).to(device)
+        y_train = torch.tensor(numpyfy(y_train), dtype=torch.float32).to(device)
+        X_test = torch.tensor(numpyfy(X_test), dtype=torch.float32).to(device)
+        y_test = torch.tensor(numpyfy(y_test), dtype=torch.float32).to(device)
 
     # Define loss function and optimizer
     if not criterion:
@@ -256,6 +262,7 @@ def train_net(
             batch_x, batch_y = X_train[indices], y_train[indices]
 
             outputs = net(batch_x)
+
             loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
