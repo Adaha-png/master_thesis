@@ -23,6 +23,7 @@ from pettingzoo.mpe import simple_spread_v3
 from shapley import kernel_explainer, shap_plot
 from stable_baselines3 import PPO
 from torch import nn
+from tqdm import tqdm
 
 from wrappers import numpyfy
 
@@ -116,26 +117,48 @@ def compute(
         if not os.path.exists(
             f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl"
         ):
-            tempenv = ss.black_death_v3(env)
-            tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
-            tempenv = ss.concat_vec_envs_v1(
-                tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+            paths = glob.glob(
+                f".pred_data/.prediction_data_shap_*_{env.metadata['name']}.pkl"
             )
-            num_acts = tempenv.action_space.n
+            if len(paths) > 0:
+                path = paths[0]
+                with open(path, "rb") as f:
+                    Obs_with_shap = pickle.load(f)
+                    Obs_with_shap = numpyfy(Obs_with_shap)
 
-            expl = [
-                kernel_explainer(env, policy_path, 0, i, device, seed=372894 * (i + 1))
-                for i in range(num_acts)
-            ]
+                X = [
+                    np.array([*X[i], *Obs_with_shap[i, -18:]])
+                    for i in tqdm(range(len(X)))
+                ]
 
-            X = add_shap(
-                X,
-                expl,
-                env,
-                device,
-                policy_path=policy_path,
-                extras=extras,
-            )
+                with open(
+                    f".pred_data/.prediction_data_shap_{extras}_{env.metadata['name']}.pkl",
+                    "wb",
+                ) as f:
+                    pickle.dump(X, f)
+            else:
+                tempenv = ss.black_death_v3(env)
+                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+                tempenv = ss.concat_vec_envs_v1(
+                    tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+                )
+                num_acts = tempenv.action_space.n
+
+                expl = [
+                    kernel_explainer(
+                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                    )
+                    for i in range(num_acts)
+                ]
+
+                X = add_shap(
+                    X,
+                    expl,
+                    env,
+                    device,
+                    policy_path=policy_path,
+                    extras=extras,
+                )
 
         else:
             with open(
@@ -166,6 +189,9 @@ def compute(
         )
         net.eval()
     else:
+        print(
+            f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt",
+        )
         net.load_state_dict(
             torch.load(
                 f".pred_models/pred_model_{args.env}_{extras}_{explainer_extras}.pt",
@@ -246,28 +272,40 @@ def compute(
                 )
 
             elif explainer_extras == "shap":
-                tempenv = ss.black_death_v3(env)
-                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
-                tempenv = ss.concat_vec_envs_v1(
-                    tempenv, 1, num_cpus=1, base_class="stable_baselines3"
-                )
-                num_acts = tempenv.action_space.n
+                paths = glob.glob(f".pred_data/.prediction_test_data_*_shap.pkl")
+                if len(paths) > 0:
+                    path = paths[0]
+                    with open(path, "rb") as f:
+                        Obs_with_shap = pickle.load(f)[0]
+                        Obs_with_shap = numpyfy(Obs_with_shap)
 
-                expl = [
-                    kernel_explainer(
-                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                    X_test = [
+                        np.array([*X_test[i], *Obs_with_shap[i, -18:]])
+                        for i in tqdm(range(len(X_test)))
+                    ]
+                else:
+                    tempenv = ss.black_death_v3(env)
+                    tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+                    tempenv = ss.concat_vec_envs_v1(
+                        tempenv, 1, num_cpus=1, base_class="stable_baselines3"
                     )
-                    for i in range(num_acts)
-                ]
+                    num_acts = tempenv.action_space.n
 
-                X_test = add_shap(
-                    X_test,
-                    expl,
-                    env,
-                    device,
-                    policy_path=policy_path,
-                    extras=extras,
-                )
+                    expl = [
+                        kernel_explainer(
+                            env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                        )
+                        for i in range(num_acts)
+                    ]
+
+                    X_test = add_shap(
+                        X_test,
+                        expl,
+                        env,
+                        device,
+                        policy_path=policy_path,
+                        extras=extras,
+                    )
 
             with open(
                 f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
