@@ -49,7 +49,7 @@ def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
             action_idx = obs[-1].item()
             shap_values = expl[action_idx].shap_values(obs_np[:-1])
         else:
-            action_idx, _ = model.predict(obs)
+            action_idx, _ = model.predict(numpyfy(obs))
             shap_values = expl[action_idx].shap_values(obs_np)
 
         return np.concatenate((obs_np, shap_values))

@@ -242,6 +242,30 @@ def compute(
                     save=False,
                 )
 
+            elif explainer_extras == "shap":
+                tempenv = ss.black_death_v3(env)
+                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
+                tempenv = ss.concat_vec_envs_v1(
+                    tempenv, 1, num_cpus=1, base_class="stable_baselines3"
+                )
+                num_acts = tempenv.action_space.n
+
+                expl = [
+                    kernel_explainer(
+                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                    )
+                    for i in range(num_acts)
+                ]
+
+                X_test = add_shap(
+                    X_test,
+                    expl,
+                    env,
+                    device,
+                    policy_path=policy_path,
+                    extras=extras,
+                )
+
             with open(
                 f".pred_data/.prediction_test_data_{extras}_{explainer_extras}.pkl",
                 "wb",
