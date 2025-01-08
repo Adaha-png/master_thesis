@@ -157,6 +157,7 @@ def future_sight(
     extras="none",
     explainer_extras="none",
     criterion=None,
+    name_identifier="pred",
 ):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -178,7 +179,7 @@ def future_sight(
     os.makedirs(".pred_models", exist_ok=True)
     torch.save(
         net.state_dict(),
-        f".pred_models/pred_model_{env_name}_{extras}_{explainer_extras}.pt",
+        f".pred_models/{name_identifier}_model_{env_name}_{extras}_{explainer_extras}.pt",
     )
     return net
 
@@ -263,6 +264,9 @@ def train_net(
 
             outputs = net(batch_x)
 
+            if len(batch_y.shape) == 1:
+                batch_y = batch_y.unsqueeze(1)
+
             loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
@@ -274,6 +278,8 @@ def train_net(
         net.eval()
         with torch.no_grad():
             test_outputs = net(X_test)
+            if len(y_test.shape) == 1:
+                y_test = y_test.unsqueeze(1)
             test_loss = criterion(test_outputs, y_test).item()
         eval_loss.append(test_loss)
         net.train()
@@ -292,6 +298,9 @@ def train_net(
     net.eval()
     with torch.no_grad():
         test_outputs = net(X_test)
+        if len(y_test.shape) == 1:
+            y_test = y_test.unsqueeze(1)
+        print(y_test.shape)
         test_loss = criterion(test_outputs, y_test).item()
         print(f"Test Loss: {test_loss}")
 
