@@ -111,7 +111,13 @@ def compute(
 
     if not os.path.exists(".pred_data/.prediction_data_crit.pkl"):
         X, y = get_crit_data(
-            args.env, env_kwargs, policy_path, agent=0, steps_per_cycle=10, seed=921
+            args.env,
+            env_kwargs,
+            policy_path,
+            agent=0,
+            amount_cycles=100000,
+            steps_per_cycle=10,
+            seed=921,
         )
         with open(".pred_data/.prediction_data_crit.pkl", "wb") as f:
             pickle.dump((X, y), f)
@@ -213,9 +219,7 @@ def compute(
         net = nn.Sequential(
             nn.Linear(len(X[0]), 64),
             nn.Tanh(),
-            nn.Linear(128, 128),
-            nn.Tanh(),
-            nn.Linear(128, 128),
+            nn.Linear(64, 64),
             nn.Tanh(),
             nn.Linear(64, 1),
             nn.Sigmoid(),
@@ -231,6 +235,7 @@ def compute(
             X,
             y,
             extras=extras,
+            epochs=200,
             explainer_extras=explainer_extras,
             criterion=nn.BCELoss(),
             name_identifier="crit",
@@ -474,5 +479,5 @@ if __name__ == "__main__":
                 table[i, j, k] = out
 
     print(table)
-    with open("table_data.pkl", "wb") as f:
+    with open("table_data_crit.pkl", "wb") as f:
         pickle.dump(table, f)
