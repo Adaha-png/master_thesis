@@ -69,7 +69,7 @@ def get_crit_data(
     diffs = []
 
     # Iterate over the number of cycles instead of using multiprocessing
-    for c in tqdm(range(9900, amount_cycles)):
+    for c in tqdm(range(0, amount_cycles)):
         # Call simulate_cycle directly
         result = simulate_cycle(
             env_name,
@@ -213,13 +213,16 @@ def compute(
         net = nn.Sequential(
             nn.Linear(len(X[0]), 64),
             nn.Tanh(),
-            nn.Linear(64, 64),
+            nn.Linear(128, 128),
+            nn.Tanh(),
+            nn.Linear(128, 128),
             nn.Tanh(),
             nn.Linear(64, 1),
+            nn.Sigmoid(),
         ).to(device)
 
     if not os.path.exists(
-        f".pred_models/pred_model_crit_{args.env}_{extras}_{explainer_extras}.pt"
+        f".pred_models/crit_model_{args.env}_{extras}_{explainer_extras}.pt"
     ):
         net = future_sight(
             args.env,
@@ -229,13 +232,14 @@ def compute(
             y,
             extras=extras,
             explainer_extras=explainer_extras,
-            criterion=nn.CrossEntropyLoss(),
+            criterion=nn.BCELoss(),
+            name_identifier="crit",
         )
         net.eval()
     else:
         net.load_state_dict(
             torch.load(
-                f".pred_models/pred_model_crit_{args.env}_{extras}_{explainer_extras}.pt",
+                f".pred_models/crit_model_{args.env}_{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
