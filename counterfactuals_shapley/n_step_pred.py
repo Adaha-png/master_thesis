@@ -154,6 +154,7 @@ def future_sight(
     net,
     X,
     y,
+    epochs=200,
     extras="none",
     explainer_extras="none",
     criterion=None,
@@ -170,7 +171,7 @@ def future_sight(
         X_test,
         y_test,
         device,
-        epochs=200,
+        epochs=epochs,
         extras=extras,
         explainer_extras=explainer_extras,
         criterion=criterion,
@@ -245,11 +246,14 @@ def train_net(
     if not criterion:
         criterion = nn.MSELoss()
 
-    optimizer = torch.optim.AdamW(net.parameters(), lr=0.1)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
-    # Training loop
-    last_lr = scheduler.get_last_lr()
-    print(f"lr = {last_lr}")
+    optimizer = torch.optim.AdamW(net.parameters(), lr=0.0001)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer, patience=5, threshold=0.00001
+    # )
+    # # Training loop
+    # last_lr = scheduler.get_last_lr()
+    # print(f"lr = {last_lr}")
+    last_lr = 0.0001
     net.train()
     eval_loss = []
     for epoch in range(epochs):
@@ -283,10 +287,10 @@ def train_net(
             test_loss = criterion(test_outputs, y_test).item()
         eval_loss.append(test_loss)
         net.train()
-        scheduler.step(test_loss)
-        if scheduler.get_last_lr() != last_lr:
-            last_lr = scheduler.get_last_lr()
-            print(f"New lr: {last_lr}")
+        # scheduler.step(test_loss)
+        # if scheduler.get_last_lr() != last_lr:
+        #     last_lr = scheduler.get_last_lr()
+        #     print(f"New lr: {last_lr}")
 
     plt.plot(range(1, (1 + len(eval_loss)), 1), eval_loss)
     plt.xlabel("Epoch")
