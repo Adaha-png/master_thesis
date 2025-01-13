@@ -13,6 +13,7 @@ import supersuit as ss
 import torch
 from captum.attr import IntegratedGradients
 from captum_grads import create_baseline
+from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from shapley import kernel_explainer, shap_plot
@@ -22,7 +23,9 @@ from stable_baselines3 import PPO
 from torch import nn
 from tqdm import tqdm
 
-from wrappers import numpyfy
+from wrappers import numpyfy, pathify
+
+load_dotenv()
 
 
 def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):

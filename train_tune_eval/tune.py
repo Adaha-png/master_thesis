@@ -6,24 +6,29 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from train_eval import eval, train
 
+from wrappers import pathify
 
-def optim(env_fn, **env_kwargs):
-    env = env_fn(**env_kwargs)
+
+def optim(tuner, trials, jobs, env_fn, **env_kwargs):
+    env = env_fn.parallel_env(**env_kwargs)
     study = optuna.create_study(
-        study_name=f"tuning_{env.metadata['name']}",
+        study_name=f"{pathify(env)}/tuning.db",
         direction="maximize",
         load_if_exists=True,
-        storage=f"sqlite:///tuning_{env.metadata['name']}.db",
+        storage=f"sqlite:///{pathify(env)}/tuning.db",
     )
+    print(jobs)
 
     study.optimize(
-        part_tuner,
-        n_trials=args.n_trials,
-        n_jobs=args.n_jobs,
+        tuner,
+        n_trials=int(trials),
+        n_jobs=int(jobs),
     )
 
+    return study
 
-def tuner(env_fn, env_kwargs, trial, max_timesteps=500_000):
+
+def tuner(env_fn, trial, max_timesteps=500_000, **env_kwargs):
     la = trial.suggest_float("la", 0.9, 0.99)
     gamma = trial.suggest_float("gamma", 0.8, 0.999)
     lr = trial.suggest_float("lr", 1e-5, 1, log=True)
@@ -50,21 +55,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t", "--timesteps", type=int, help="Max timesteps", default=500_000
     )
+    env_fn = simple_spread_v3
+
+    env_kwargs = dict(
+        N=3,
+        local_ratio=0.5,
+        max_cycles=25,
+        continuous_actions=False,
+    )
     parser.add_argument("-n", "--n_trials", type=int, help="Max trials", default=200)
 
     parser.add_argument("-j", "--n_jobs", type=int, help="Simultaneous jobs", default=4)
     args = parser.parse_args()
     part_tuner = partial(tuner, max_timesteps=args.timesteps)
-
-    study = optuna.create_study(
-        study_name=f"tuning_{args.env}",
-        direction="maximize",
-        load_if_exists=True,
-        storage=f"sqlite:///tuning_{args.env}.db",
-    )
-
-    study.optimize(
-        part_tuner,
-        n_trials=args.n_trials,
-        n_jobs=args.n_jobs,
-    )
+    optim(tuner, env_fn, **env_kwargs)

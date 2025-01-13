@@ -4,7 +4,6 @@ import optuna
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3.common.callbacks import CheckpointCallback
-
 from train_eval import eval, train
 
 if __name__ == "__main__":
