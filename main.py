@@ -2,34 +2,76 @@ import argparse
 import glob
 import os
 import random
+import sys
+from functools import partial
 
 import numpy as np
+import optuna
 import torch
+from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 
-import counterfactuals_shapley
-import train_tune_eval
+sys.path.append("counterfactuals_shapley")
+sys.path.append("train_tune_eval")
 
-def new_policy(env_fn, env_kwargs):
-    pass
+import train_eval
+import tune
 
-def run(env_fn, env_kwargs, always_execute_everything = False):
-    timesteps_for_tuning = 500_000
+load_dotenv()
 
+
+def new_policy(rerun_everything, env_fn, **env_kwargs):
+    if rerun_everything:
+        tuner = partial(
+            tune.tuner, env_fn, max_timesteps=os.environ["TUNING_STEPS"], **env_kwargs
+        )
+        study = tune.optim(
+            tuner, os.environ["TRIALS"], os.environ["JOBS"], env_fn, **env_kwargs
+        )
+    else:
+        study = optuna.load_study(
+            study_name=f"tuning_{args.env}",
+            storage=f"sqlite:///tuning_{args.env}.db",
+        )
+
+    trial = study.best_trial
+    la = trial.suggest_float("la", 0.9, 0.99)
+    gamma = trial.suggest_float("gamma", 0.8, 0.999)
+    lr = trial.suggest_float("lr", 1e-6, 1, log=True)
+
+    print(
+        f"Using learning rate: {lr:.6f}, discount factor: {gamma:.3f}, TD parameter: {la:.3f}"
+    )
+
+    train_eval.train(
+        env_fn,
+        steps=args.timesteps,
+        lr=lr,
+        gamma=gamma,
+        la=la,
+        **env_kwargs,
+    )
+
+
+def run(env_fn, rerun_everything=False, **env_kwargs):
     policy_path = None
-    if not os.path.exists(f".{str(env.metadata['name'])}/rl_models"):
-        os.mkdir(f".{str(env.metadata['name'])}/rl_models")
+    if not os.path.exists(
+        f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}"
+    ):
+        os.makedirs(f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}")
 
-    elif not always_execute_everything:
+    elif not rerun_everything:
         policy_path = max(
-            glob.glob(f".{str(env.metadata['name'])}/rl_models/*.zip"),
+            glob.glob(
+                f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}/*.zip"
+            ),
             key=os.path.getctime,
         )
 
-
     if not policy_path:
-        new_policy(env_fn, env_kwargs)
+        new_policy(rerun_everything, env_fn, **env_kwargs)
+
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -58,27 +100,33 @@ if __name__ == "__main__":
             max_cycles=25,
             continuous_actions=False,
         )
+        N = int(env_kwargs["N"])
 
-        feature_names = [
-            "vel x",
-            "vel y",
-            "pos x",
-            "pos y",
-            "landmark 1 x",
-            "landmark 1 y",
-            "landmark 2 x",
-            "landmark 2 y",
-            "landmark 3 x",
-            "landmark 3 y",
-            "agent 2 x",
-            "agent 2 y",
-            "agent 3 x",
-            "agent 3 y",
-            "comms 1",
-            "comms 2",
-            "comms 3",
-            "comms 4",
+        feature_base_names = ["vel x", "vel y", "pos x", "pos y"]
+
+        landmark_feature_names = [f"landmark {i} x" for i in range(1, N + 1)] + [
+            f"landmark {i} y" for i in range(1, N + 1)
         ]
+        landmark_feature_names = [
+            feature
+            for i in range(1, N + 1)
+            for feature in (f"landmark {i} x", f"landmark {i} y")
+        ]
+
+        agent_feature_names = [
+            feature
+            for i in range(2, N + 1)
+            for feature in (f"agent {i} x", f"agent {i} y")
+        ]
+
+        comms_feature_names = [f"comms {i}" for i in range(1, 5)]
+
+        feature_names = (
+            feature_base_names
+            + landmark_feature_names
+            + agent_feature_names
+            + comms_feature_names
+        )
         act_dict = {
             0: "no action",
             1: "move left",
@@ -86,6 +134,7 @@ if __name__ == "__main__":
             3: "move down",
             4: "move up",
         }
+
     elif args.env == "kaz":
         env_fn = knights_archers_zombies_v10
 
@@ -137,4 +186,4 @@ if __name__ == "__main__":
         exit(0)
 
     env = env_fn.parallel_env(**env_kwargs)
-        run(env, policy_path)
+    run(env_fn, rerun_everything=True, **env_kwargs)

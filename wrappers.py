@@ -1,3 +1,4 @@
+import inspect
 from types import MethodType
 
 import numpy as np
@@ -36,3 +37,12 @@ def numpyfy(X):
         return np.array(X.cpu())
     else:
         return np.array(X)
+
+
+def pathify(env):
+    modules = [cls.__module__ for cls in inspect.getmro(type(env))]
+    return (
+        "." + env.unwrapped.metadata["name"]
+        if any("supersuit" in module_name for module_name in modules)
+        else "." + env.metadata["name"]
+    )

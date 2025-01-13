@@ -5,12 +5,15 @@ import time
 
 import numpy as np
 import supersuit as ss
+from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 
-from wrappers import par_env_with_seed
+from wrappers import par_env_with_seed, pathify
+
+load_dotenv()
 
 
 def train(
@@ -26,6 +29,7 @@ def train(
     model=None,
     **env_kwargs,
 ):
+    steps = int(steps)
     # Train a single model to play as each agent in an AEC environment
     env = env_fn.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
@@ -59,16 +63,17 @@ def train(
 
     if tune:
         model.save(
-            f"tune_{env.unwrapped.metadata.get('name')}/{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}"
+            f".{pathify(env)}/{os.environ['TUNING_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
         )
     else:
         model.save(
-            f"train_{env.unwrapped.metadata.get('name')}/{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}"
+            f".{pathify(env)}/{os.environ['MODEL_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
         )
     print("Model has been saved.")
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
 
     env.close()
+    return model
 
 
 def eval(
@@ -76,6 +81,7 @@ def eval(
     num_games: int = 100,
     render_mode=None,
     tune=False,
+    seed=False,
     **env_kwargs,
 ):
     env = env_fn.parallel_env(render_mode=render_mode, **env_kwargs)
@@ -87,7 +93,7 @@ def eval(
     if tune:
         try:
             latest_policy = max(
-                glob.glob(f"tune_{str(env.metadata['name'])}/*.zip"),
+                glob.glob(f"{pathify(env)}/{os.environ['TUNING_PATH']}/*.zip"),
                 key=os.path.getctime,
             )
             print(latest_policy)
@@ -98,7 +104,7 @@ def eval(
     else:
         try:
             latest_policy = max(
-                glob.glob(f"{str(env.metadata['name'])}/*.zip"),
+                glob.glob(f"{pathify(env)}/{os.environ['RL_MODEL_PATH']}/*.zip"),
                 key=os.path.getctime,
             )
             print(latest_policy)
@@ -114,7 +120,7 @@ def eval(
 
     episode_rewards = []
     agent_reward = np.zeros(num_agents)
-    for i in range(num_games):
+    for _ in range(num_games):
         if seed:
             env = par_env_with_seed(env, seed)
         obs = env.reset()
