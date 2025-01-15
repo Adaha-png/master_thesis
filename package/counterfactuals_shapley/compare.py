@@ -9,8 +9,14 @@ import numpy as np
 import supersuit as ss
 import torch
 from captum.attr import IntegratedGradients
-from captum_grads import create_baseline
-from n_step_pred import (
+from pettingzoo.butterfly import knights_archers_zombies_v10
+from pettingzoo.mpe import simple_spread_v3
+from stable_baselines3 import PPO
+from torch import nn
+from tqdm import tqdm
+
+from .captum_grads import create_baseline
+from .n_step_pred import (
     add_action,
     add_ig,
     add_shap,
@@ -18,14 +24,8 @@ from n_step_pred import (
     get_future_data,
     one_hot_action,
 )
-from pettingzoo.butterfly import knights_archers_zombies_v10
-from pettingzoo.mpe import simple_spread_v3
-from shapley import kernel_explainer, shap_plot
-from stable_baselines3 import PPO
-from torch import nn
-from tqdm import tqdm
-
-from wrappers import numpyfy
+from .shapley import kernel_explainer, shap_plot
+from .wrappers import numpyfy
 
 
 def distance(predicted, y):
@@ -345,6 +345,31 @@ def make_plots(explainer, X, filename):
     )
 
 
+def run_compare(policy_path, feature_names, act_dict):
+    extras = ["none", "action", "one-hot"]
+    explainer_extras = ["none", "ig", "shap"]
+
+    table = np.zeros((3, len(extras), len(explainer_extras)))
+
+    for i, extra in enumerate(extras):
+        for j, expl in enumerate(explainer_extras):
+            outs = compute(
+                policy_path,
+                feature_names,
+                act_dict,
+                extras=extra,
+                explainer_extras=expl,
+            )
+            for k, out in enumerate(outs):
+                table[i, j, k] = out
+
+    print(table)
+    with open("table_data.pkl", "wb") as f:
+        pickle.dump(table, f)
+
+    return table
+
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed = 42
@@ -436,23 +461,4 @@ if __name__ == "__main__":
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
 
-    extras = ["none", "action", "one-hot"]
-    explainer_extras = ["none", "ig", "shap"]
-
-    table = np.zeros((3, len(extras), len(explainer_extras)))
-
-    for i, extra in enumerate(extras):
-        for j, expl in enumerate(explainer_extras):
-            outs = compute(
-                policy_path,
-                feature_names,
-                act_dict,
-                extras=extra,
-                explainer_extras=expl,
-            )
-            for k, out in enumerate(outs):
-                table[i, j, k] = out
-
-    print(table)
-    with open("table_data.pkl", "wb") as f:
-        pickle.dump(table, f)
+    run_compare(policy_path, feature_names, act_dict)

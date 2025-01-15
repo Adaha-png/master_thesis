@@ -11,11 +11,11 @@ import shap
 import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from tqdm import tqdm
 
-from wrappers import numpyfy
+from .sim_steps import sim_steps
+from .wrappers import numpyfy
 
 
 def pred(model, act, device, obs, softmax=True):
@@ -53,9 +53,9 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     if isinstance(shap_values, list):
         shap_values = np.stack(shap_values, axis=-1)
 
-    assert shap_values.shape[1] == len(
-        feature_names
-    ), "Mismatch between SHAP values and feature names dimensions."
+    assert shap_values.shape[1] == len(feature_names), (
+        "Mismatch between SHAP values and feature names dimensions."
+    )
 
     # Compute mean absolute SHAP values across all instances
     mean_shap_values = np.mean(np.abs(shap_values), axis=0)
