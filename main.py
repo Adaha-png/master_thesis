@@ -2,9 +2,9 @@ import argparse
 import glob
 import os
 import random
-import sys
 from functools import partial
 
+import counterfactuals_shapley.compare as compare
 import numpy as np
 import optuna
 import torch
@@ -12,17 +12,14 @@ from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 
-sys.path.append("counterfactuals_shapley")
-sys.path.append("train_tune_eval")
-
-import train_eval
-import tune
+import train_tune_eval.train_eval as train_eval
+import train_tune_eval.tune as tune
 
 load_dotenv()
 
 
-def new_policy(rerun_everything, env_fn, **env_kwargs):
-    if rerun_everything:
+def train_new_policy(should_tune, env_fn, **env_kwargs):
+    if should_tune:
         tuner = partial(
             tune.tuner, env_fn, max_timesteps=os.environ["TUNING_STEPS"], **env_kwargs
         )
@@ -44,7 +41,7 @@ def new_policy(rerun_everything, env_fn, **env_kwargs):
         f"Using learning rate: {lr:.6f}, discount factor: {gamma:.3f}, TD parameter: {la:.3f}"
     )
 
-    train_eval.train(
+    policy_path = train_eval.train(
         env_fn,
         steps=args.timesteps,
         lr=lr,
@@ -53,24 +50,31 @@ def new_policy(rerun_everything, env_fn, **env_kwargs):
         **env_kwargs,
     )
 
+    train_eval.eval(env_fn, **env_kwargs, seed=283943)
 
-def run(env_fn, rerun_everything=False, **env_kwargs):
+    return policy_path
+
+
+def get_policy(env_fn, should_tune=False, new_policy=True, **env_kwargs):
     policy_path = None
     if not os.path.exists(
         f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}"
     ):
         os.makedirs(f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}")
-
-    elif not rerun_everything:
-        policy_path = max(
-            glob.glob(
-                f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}/*.zip"
-            ),
-            key=os.path.getctime,
-        )
+    elif not new_policy:
+        try:
+            policy_path = max(
+                glob.glob(f".{str(env.metadata['name'])}/*.zip"),
+                key=os.path.getctime,
+            )
+            print(policy_path)
+        except ValueError:
+            print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
 
     if not policy_path:
-        new_policy(rerun_everything, env_fn, **env_kwargs)
+        policy_path = train_new_policy(should_tune, env_fn, **env_kwargs)
+
+    return policy_path
 
 
 if __name__ == "__main__":
@@ -86,7 +90,6 @@ if __name__ == "__main__":
         "--env",
         type=str,
         help="Which environment to use",
-        default="spread",
     )
 
     args = parser.parse_args()
@@ -186,4 +189,6 @@ if __name__ == "__main__":
         exit(0)
 
     env = env_fn.parallel_env(**env_kwargs)
-    run(env_fn, rerun_everything=True, **env_kwargs)
+
+    policy_path = get_policy(env_fn, should_tune=True, new_policy=True, **env_kwargs)
+    compare.run_compare(policy_path, feature_names, act_dict)

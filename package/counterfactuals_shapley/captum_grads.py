@@ -8,15 +8,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from captum.attr import IntegratedGradients
-from counterfactuals import action_difference_with_model, counterfactuals_with_model
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from shapley import get_data
-from sim_steps import sim_steps
 from stable_baselines3 import PPO
 from torch import nn
 
-from wrappers import numpyfy
+from .counterfactuals import action_difference_with_model, counterfactuals_with_model
+from .shapley import get_data
+from .sim_steps import sim_steps
+from .wrappers import numpyfy
 
 
 def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device):
@@ -59,7 +59,7 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     attributions = attributions[sorted_indices]
     feature_names = numpyfy(feature_names)[sorted_indices]
 
-    print(f"Action: {act_dict[action]}, Confidence:{net.forward(obs)[0,action]}")
+    print(f"Action: {act_dict[action]}, Confidence:{net.forward(obs)[0, action]}")
 
     # Create a new figure and axis
     _, ax = plt.subplots(figsize=(8, 12))
@@ -203,7 +203,7 @@ if __name__ == "__main__":
         agent = np.argmax(individual[1:])
         action = seq[index]["action"][agent]
         relevant_obs = torch.from_numpy(relevant_obs[agent]).unsqueeze(0)
-        print(f"{action := int(action)=}")
+        print(f"{action:= int(action)=}")
 
         # Assuming the action and relevant_obs variables are already defined
         data_to_save = {

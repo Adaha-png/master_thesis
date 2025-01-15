@@ -5,13 +5,12 @@ import time
 
 import numpy as np
 import supersuit as ss
+from counterfactuals_shapley.wrappers import par_env_with_seed, pathify
 from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
-
-from wrappers import par_env_with_seed, pathify
 
 load_dotenv()
 
@@ -62,18 +61,17 @@ def train(
         model.learn(total_timesteps=steps, callback=callback)
 
     if tune:
-        model.save(
-            f".{pathify(env)}/{os.environ['TUNING_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
-        )
+        save_path = f".{pathify(env)}/{os.environ['TUNING_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
     else:
-        model.save(
-            f".{pathify(env)}/{os.environ['MODEL_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
-        )
+        save_path = f".{pathify(env)}/{os.environ['MODEL_PATH']}/{time.strftime('%Y%m%d-%H%M%S')}"
+
+    model.save(save_path)
     print("Model has been saved.")
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
 
     env.close()
-    return model
+
+    return save_path
 
 
 def eval(
@@ -81,7 +79,7 @@ def eval(
     num_games: int = 100,
     render_mode=None,
     tune=False,
-    seed=False,
+    seed=None,
     **env_kwargs,
 ):
     env = env_fn.parallel_env(render_mode=render_mode, **env_kwargs)
@@ -120,9 +118,9 @@ def eval(
 
     episode_rewards = []
     agent_reward = np.zeros(num_agents)
-    for _ in range(num_games):
-        if seed:
-            env = par_env_with_seed(env, seed)
+    for i in range(num_games):
+        if not seed == None:
+            env = par_env_with_seed(env, seed * i)
         obs = env.reset()
         done = False
         episode_reward = 0

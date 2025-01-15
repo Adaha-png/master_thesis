@@ -12,10 +12,10 @@ from nsga2.evolution import Evolution
 from nsga2.problem import Problem
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from sim_steps import sim_steps, sim_steps_partial
 from sklearn.model_selection import train_test_split
 
-from wrappers import numpyfy, par_env_with_seed
+from .sim_steps import sim_steps, sim_steps_partial
+from .wrappers import numpyfy, par_env_with_seed
 
 
 def action_difference(sequence1, *actions_list2):

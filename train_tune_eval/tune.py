@@ -2,11 +2,11 @@ import argparse
 from functools import partial
 
 import optuna
+from counterfactuals_shapley.wrappers import pathify
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from train_eval import eval, train
 
-from wrappers import pathify
+from .train_eval import eval, train
 
 
 def optim(tuner, trials, jobs, env_fn, **env_kwargs):
