@@ -4,7 +4,6 @@ import os
 import random
 from functools import partial
 
-import counterfactuals_shapley.compare as compare
 import numpy as np
 import optuna
 import torch
@@ -12,6 +11,7 @@ from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 
+import counterfactuals_shapley.compare as compare
 import train_tune_eval.train_eval as train_eval
 import train_tune_eval.tune as tune
 
