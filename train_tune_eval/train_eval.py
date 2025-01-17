@@ -5,13 +5,12 @@ import time
 
 import numpy as np
 import supersuit as ss
+from counterfactuals_shapley.wrappers import par_env_with_seed, pathify
 from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
-
-from counterfactuals_shapley.wrappers import par_env_with_seed, pathify
 
 load_dotenv()
 
