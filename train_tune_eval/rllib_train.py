@@ -1,8 +1,3 @@
-"""Uses Ray's RLlib to train agents to play Pistonball.
-
-Author: Rohan (https://github.com/Rohan138)
-"""
-
 import os
 
 import ray
@@ -10,35 +5,12 @@ import supersuit as ss
 from pettingzoo.mpe import simple_spread_v3
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.core.models.configs import ActorCriticEncoderConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.rllib.models import ModelCatalog
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.tune.registry import register_env
 from torch import nn
-
-
-class MLPModel(TorchModelV2, nn.Module):
-    def __init__(self, obs_space, act_space, num_outputs, *args, **kwargs):
-        TorchModelV2.__init__(self, obs_space, act_space, num_outputs, *args, **kwargs)
-        nn.Module.__init__(self)
-
-        self.model = nn.Sequential(
-            nn.Linear(64, 64),
-            nn.Tanh(),
-            nn.Linear(64, 64),
-            nn.Tanh(),
-        )
-
-        self.policy_fn = nn.Linear(64, num_outputs)
-        self.value_fn = nn.Linear(64, 1)
-
-    def forward(self, input_dict, state, seq_lens):
-        model_out = self.model(input_dict["obs"].permute(0, 3, 1, 2))
-        self._value_out = self.value_fn(model_out)
-        return self.policy_fn(model_out), state
-
-    def value_function(self):
-        return self._value_out.flatten()
 
 
 def env_creator(config):
@@ -50,11 +22,8 @@ def env_creator(config):
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
-    # MarkovVectorEnv does not support environments with varying numbers of active agents unless black_death is set to True
     env = ss.black_death_v3(env)
-
     env.reset()
-
     return env
 
 
@@ -67,19 +36,20 @@ def train(
     la=0.95,
 ):
     ray.init()
-
     env = env_creator(None)
-
     env_name = env.metadata["name"]
-
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
-    ModelCatalog.register_custom_model("MLPModel", MLPModel)
+    # ModelCatalog.register_custom_model("MLPModel", MLPModel)
 
+    encoder_config = ActorCriticEncoderConfig()
     config = (
         PPOConfig()
         .environment(env=env_name, clip_actions=True)
         .env_runners(num_env_runners=4, rollout_fragment_length=128)
         .training(
+            model={
+                "encoder_config": encoder_config,
+            },
             train_batch_size=512,
             lr=lr,
             gamma=gamma,
@@ -107,6 +77,4 @@ def train(
 
 
 if __name__ == "__main__":
-    env_fn = simple_spread_v3
-
     train()
