@@ -2,6 +2,7 @@ import os
 
 import ray
 import supersuit as ss
+from gymnasium.wrappers import FlattenObservation
 from pettingzoo.mpe import simple_spread_v3
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -21,6 +22,7 @@ def env_creator(config):
         continuous_actions=False,
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
+    env = FlattenObservation(env)
     # Add black death wrapper so the number of agents stays constant
     env = ss.black_death_v3(env)
     env.reset()
