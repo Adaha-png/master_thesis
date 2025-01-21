@@ -1,20 +1,21 @@
+import glob
 import os
+import pickle
+import warnings
 
 import ray
 import supersuit as ss
-from gymnasium.wrappers import FlattenObservation
+from dotenv import load_dotenv
 from pettingzoo.mpe import simple_spread_v3
-from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
-from ray.rllib.core.models.configs import ActorCriticEncoderConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
-from ray.rllib.models import ModelCatalog
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.tune.registry import register_env
-from torch import nn
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+load_dotenv()
 
 
-def env_creator(config):
+def env_creator(config=None):
     env_kwargs = dict(
         N=3,
         local_ratio=0.5,
@@ -22,61 +23,110 @@ def env_creator(config):
         continuous_actions=False,
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
-    env = FlattenObservation(env)
     # Add black death wrapper so the number of agents stays constant
     env = ss.black_death_v3(env)
     env.reset()
     return env
 
 
-def train(
-    steps: int = 2_000_000,
-    seed=0,
-    device="auto",
-    lr=0.0003,
-    gamma=0.99,
-    la=0.95,
-):
+def run_train(lr=0.00001, gamma=0.99):
     ray.init()
-    env = env_creator(None)
-    env_name = env.metadata["name"]
-    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
-    # ModelCatalog.register_custom_model("MLPModel", MLPModel)
 
-    encoder_config = ActorCriticEncoderConfig()
+    temp_env = env_creator()
+    temp_env.reset()
+    env_name = temp_env.metadata["name"]
+
+    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+
     config = (
         PPOConfig()
-        .environment(env=env_name, clip_actions=True)
-        .env_runners(num_env_runners=4, rollout_fragment_length=128)
+        .environment(
+            env=env_name,
+            disable_env_checking=True,
+        )
+        .framework("torch")
+        .env_runners(num_env_runners=15)
         .training(
             model={
-                "encoder_config": encoder_config,
+                "fcnet_hiddens": [64, 64],
+                "fcnet_activation": "tanh",
             },
-            train_batch_size=512,
+            train_batch_size=4000,
             lr=lr,
             gamma=gamma,
-            lambda_=la,
-            use_gae=True,
-            clip_param=0.4,
-            grad_clip=None,
-            entropy_coeff=0.1,
-            vf_loss_coeff=0.25,
-            num_epochs=10,
         )
-        .debugging(log_level="ERROR")
-        .framework(framework="torch")
-        .resources(num_gpus=int(os.environ.get("RLLIB_NUM_GPUS", "0")))
+        .multi_agent(
+            policies={
+                agent_type.split("_")[0]: (
+                    None,
+                    temp_env.observation_space(agent_type),
+                    temp_env.action_space(agent_type),
+                    {},
+                )
+                for agent_type in temp_env.possible_agents
+            },
+            policy_mapping_fn=lambda agent_id, episode, **kwargs: agent_id.split("_")[
+                0
+            ],
+        )
+        .api_stack(
+            enable_rl_module_and_learner=False,
+            enable_env_runner_and_connector_v2=False,
+        )
     )
 
-    tune.run(
-        "PPO",
-        name="PPO",
-        stop={"timesteps_total": steps if not os.environ.get("CI") else 50000},
-        checkpoint_freq=10,
-        storage_path="~/ray_results/" + env_name,
-        config=config.to_dict(),
-    )
+    temp_env.close()
+    # 5. Build the PPO algorithm
+    algo = config.build()
+
+    # 6. Training Loop
+    for i in range(50):  # Increase this number for longer training
+        result = algo.train()
+        print(
+            f"Iteration {i}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
+        )
+
+    with open(f".{env_name}/{os.environ['RL_MODEL_PATH']}", "wb") as f:
+        pickle.dump(algo, f)
+
+    algo.stop()
+    ray.shutdown()
+
+    return algo
+
+
+def run_inference(algo, num_episodes: int = 5):
+    """
+    Run inference in the environment for a certain number of episodes
+    using a loaded PPO model. Prints out total reward per episode.
+    """
+
+    env = ParallelPettingZooEnv(env_creator(None))
+
+    total_reward = 0.0
+    for episode in range(num_episodes):
+        obs = env.reset()
+        done = {agent_id: False for agent_id in env.agents}
+
+        while not all(done.values()):
+            actions = {}
+            # For each agent, get the current observation and compute an action
+            for agent_id, agent_obs in obs.items():
+                # By default, if you're using a single shared policy,
+                # "policy_id" is usually "default_policy".
+                # If you have a custom multi-agent setup, adjust accordingly.
+                actions[agent_id] = algo.compute_single_action(
+                    agent_obs, policy_id=agent_id.split("_")[]
+                )
+
+            # Step the environment with the multi-agent action dict
+            obs, rewards, done, infos = env.step(actions)
+
+            # Accumulate rewards across all agents
+            total_reward += sum(rewards.values())
+
+    return total_reward / num_episodes
 
 
 if __name__ == "__main__":
-    train()
+    run_train()
