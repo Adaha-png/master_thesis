@@ -1,5 +1,23 @@
 
 # Reading list
+
+
+## Explainable Deep Reinforcement Learning: State of the Art and Challenges
+## Memory-based explainable reinforcement learning
+## Wenbo Guo, Xian Wu, Usmann Khan, and Xinyu Xing. 2021. Edge: Explaining deep reinforcement learning policies
+input episodes with actions to rnn -> mlp -> deep gaussian process -> reward at time step prediction -> time step importance
+timestep importance in losing games -> try random actions -> create lut of winning strategies
+## Predicting Future Actions of Reinforcement LearningAgents
+explicit planners, implicit planners and non planners, explicit perform the best but probably less interesting for me, implicit planners like deep repeated convLSTM are very interesting for me. non planners did not perform well, looking at difference between implicit and non planners also very interesting
+## Thinker: Learning to Plan and Act
+## Neural Algorithmic Reasoners are Implicit Planners
+## STABILIZING TRANSFORMERS FOR REINFORCEMENT LEARNING
+## Decision Transformer: Reinforcement Learning via Sequence Modeling
+
+
+comparing LSTMS with transformers seems interesting
+
+
 ## Acter
 ### Relevancy
 * Counterfactual sequences
