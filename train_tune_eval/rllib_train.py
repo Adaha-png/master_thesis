@@ -3,9 +3,12 @@ import os
 import pickle
 import warnings
 
+import numpy as np
+import optuna
 import ray
 import supersuit as ss
 from dotenv import load_dotenv
+from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
@@ -15,7 +18,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
 
 
-def env_creator(config=None):
+def simple_spread_env(config=None):
     env_kwargs = dict(
         N=3,
         local_ratio=0.5,
@@ -24,19 +27,57 @@ def env_creator(config=None):
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
+    env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
     return env
 
 
-def run_train(lr=0.00001, gamma=0.99):
+def kaz_env(config=None):
+    env_fn = knights_archers_zombies_v10
+
+    env_kwargs = dict(
+        spawn_rate=6,
+        num_archers=2,
+        num_knights=2,
+        max_zombies=10,
+        max_arrows=10,
+        max_cycles=900,
+        vector_state=True,
+    )
+
+    env = env_fn.parallel_env(**env_kwargs)
+
+    env = ss.flatten_v0(env)
+    env = ss.black_death_v3(env)
+    env.reset()
+
+    return env
+
+
+def env_creator(config=None):
+    return simple_spread_env(config)
+
+
+def run_train(
+    lr=0.0003,
+    gamma=0.99,
+    max_timesteps=2_000_000,
+    seed=0,
+    tuning=False,
+):
     ray.init()
 
     temp_env = env_creator()
     temp_env.reset()
     env_name = temp_env.metadata["name"]
 
+    print(
+        f"Starting training on {env_name} with lr: {lr:.3e} and discount factor: {gamma:.3f}"
+    )
+
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+    steps_per_iter = 20000
 
     config = (
         PPOConfig()
@@ -50,10 +91,23 @@ def run_train(lr=0.00001, gamma=0.99):
             model={
                 "fcnet_hiddens": [64, 64],
                 "fcnet_activation": "tanh",
+                "use_lstm": True,
+                "lstm_cell_size": 64,
+                "max_seq_len": 20,
+                "lstm_use_prev_action": True,
+                "lstm_use_prev_reward": True,
+                # "use_attention": True,
+                # "attention_dim": 64,
+                # "attention_num_transformer_units": 2,
+                # "attention_num_heads": 2,
+                # "attention_memory_training": 30,  # Short-term memory
+                # "attention_memory_inference": 30,
             },
-            train_batch_size=4000,
+            train_batch_size=steps_per_iter,
+            minibatch_size=512,
             lr=lr,
             gamma=gamma,
+            shuffle_batch_per_epoch=True,
         )
         .multi_agent(
             policies={
@@ -80,14 +134,23 @@ def run_train(lr=0.00001, gamma=0.99):
     algo = config.build()
 
     # 6. Training Loop
-    for i in range(50):  # Increase this number for longer training
+    training_iters = max(max_timesteps // steps_per_iter, 1)
+
+    max_reward_mean = -np.inf
+    for i in range(training_iters):
         result = algo.train()
         print(
-            f"Iteration {i}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
+            f"Iteration {i+1}/{training_iters}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
         )
+        if not tuning:
+            if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
+                max_reward_mean = result["env_runners"]["episode_reward_mean"]
+                algo.save(
+                    checkpoint_dir=f".{env_name}/{os.environ['RL_TRAINING_PATH']}"
+                )
 
-    with open(f".{env_name}/{os.environ['RL_MODEL_PATH']}", "wb") as f:
-        pickle.dump(algo, f)
+    if tuning:
+        algo.save(checkpoint_dir=f".{env_name}/{os.environ['RL_TUNING_PATH']}")
 
     algo.stop()
     ray.shutdown()
@@ -95,38 +158,44 @@ def run_train(lr=0.00001, gamma=0.99):
     return algo
 
 
-def run_inference(algo, num_episodes: int = 5):
+def run_inference(algo, num_episodes: int = 100):
     """
     Run inference in the environment for a certain number of episodes
     using a loaded PPO model. Prints out total reward per episode.
     """
-
-    env = ParallelPettingZooEnv(env_creator(None))
+    env = env_creator()
 
     total_reward = 0.0
     for episode in range(num_episodes):
-        obs = env.reset()
+        obs, _ = env.reset()
         done = {agent_id: False for agent_id in env.agents}
-
         while not all(done.values()):
             actions = {}
+
             # For each agent, get the current observation and compute an action
             for agent_id, agent_obs in obs.items():
-                # By default, if you're using a single shared policy,
-                # "policy_id" is usually "default_policy".
-                # If you have a custom multi-agent setup, adjust accordingly.
                 actions[agent_id] = algo.compute_single_action(
-                    agent_obs, policy_id=agent_id.split("_")[]
+                    agent_obs, policy_id=agent_id.split("_")[0]
                 )
 
             # Step the environment with the multi-agent action dict
-            obs, rewards, done, infos = env.step(actions)
+            obs, rewards, done, _, infos = env.step(actions)
 
             # Accumulate rewards across all agents
             total_reward += sum(rewards.values())
-
     return total_reward / num_episodes
 
 
 if __name__ == "__main__":
-    run_train()
+    env = env_creator()
+    study = optuna.load_study(
+        study_name=f".{env.metadata['name']}/tuning.db",
+        storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
+    )
+
+    trial = study.best_trial
+    env.close()
+    gamma = trial.suggest_float("gamma", 0.8, 0.999)
+    lr = trial.suggest_float("lr", 1e-5, 1, log=True)
+    lr = 2e-5
+    run_train(gamma=gamma, lr=lr, max_timesteps=2_000_000)
