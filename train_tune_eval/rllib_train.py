@@ -3,6 +3,7 @@ import os
 import pickle
 import warnings
 
+import imageio
 import numpy as np
 import optuna
 import ray
@@ -24,7 +25,7 @@ def simple_spread_env(config=None):
         local_ratio=0.2,
         max_cycles=25,
         continuous_actions=False,
-        render_mode="human",
+        render_mode="rgb_array",
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
@@ -194,21 +195,19 @@ def watch_single_episode():
 
     :param env_name: Name of the environment (also used as checkpoint path).
     """
+    frames = []
     env = env_creator()
     env.reset()
     env_name = env.metadata["name"]
 
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
     # 1) Initialize Ray
-    ray.init(num_cpus=1, ignore_reinit_error=True)
+    ray.init(ignore_reinit_error=True)
 
     # 2) Load the trained policy from
     checkpoint_path = "file://" + os.path.abspath(f".{env_name}/policies")
 
-    print(checkpoint_path)
     algo = PPO.from_checkpoint(checkpoint_path)
-
-    print("fjkdsljf")
 
     observations, _ = env.reset()
 
@@ -224,10 +223,16 @@ def watch_single_episode():
         observations, _, done, _, _ = env.step(actions)
 
         # Render the environment's current state
-        env.render()
+        frame = env.render()
+        frames.append(frame)
 
     # 5) Close the environment
     env.close()
+
+    video_filename = f".{env_name}/episode.mp4"
+    print(video_filename)
+    imageio.mimsave(video_filename, frames, fps=10)
+    print(f"Video saved to {video_filename}")
 
     # 6) Shutdown Ray if you no longer need it
     ray.shutdown()
