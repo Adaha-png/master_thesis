@@ -200,13 +200,15 @@ def watch_single_episode():
 
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
     # 1) Initialize Ray
-    ray.init(ignore_reinit_error=True)
+    ray.init(num_cpus=1, ignore_reinit_error=True)
 
     # 2) Load the trained policy from
     checkpoint_path = "file://" + os.path.abspath(f".{env_name}/policies")
 
     print(checkpoint_path)
     algo = PPO.from_checkpoint(checkpoint_path)
+
+    print("fjkdsljf")
 
     observations, _ = env.reset()
 
