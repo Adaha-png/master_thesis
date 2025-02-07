@@ -28,8 +28,8 @@ def train_new_policy(should_tune, env_fn, **env_kwargs):
         )
     else:
         study = optuna.load_study(
-            study_name=f"tuning_{args.env}",
-            storage=f"sqlite:///tuning_{args.env}.db",
+            study_name=f".{env.metadata['name']}/tuning.db",
+            storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
         )
 
     trial = study.best_trial
@@ -58,9 +58,9 @@ def train_new_policy(should_tune, env_fn, **env_kwargs):
 def get_policy(env_fn, should_tune=False, new_policy=True, **env_kwargs):
     policy_path = None
     if not os.path.exists(
-        f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}"
+        f".{str(env.metadata['name'])}/{os.environ['RL_TRAINING_PATH']}"
     ):
-        os.makedirs(f".{str(env.metadata['name'])}/{os.environ['RL_MODEL_PATH']}")
+        os.makedirs(f".{str(env.metadata['name'])}/{os.environ['RL_TRAINING_PATH']}")
     elif not new_policy:
         try:
             policy_path = max(
@@ -119,12 +119,9 @@ if __name__ == "__main__":
         agent_feature_names = [
             feature
             for i in range(2, N + 1)
-            for feature in (f"agent {i} x", f"agent {i} y")
         ]
 
         comms_feature_names = [f"comms {i}" for i in range(1, 5)]
-
-        feature_names = (
             feature_base_names
             + landmark_feature_names
             + agent_feature_names
