@@ -5,142 +5,327 @@
 \usepackage[UKenglish]{uiomasterfp}
 \usepackage[nottoc]{tocbibind}
 \usepackage[hidelinks]{hyperref}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[printonlyused]{acronym}
+\usepackage{tikz}
+\usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
+\addbibresource{ref.bib}
+\usetikzlibrary{arrows, arrows.meta, positioning, calc}
+\usepackage{listofitems}
 \title{Explainable Reinforcement Learning}
 \subtitle{Discovering intent based explanations for heterogeneous cooperative multi agent reinforcement learning agents}
 \author{Ada Hatland}
 \date{August 2024}
+
 \begin{document}
 \uiomasterfp[master, program={Informatics: Robotics and Intelligent Systems},
   color=orange, dept={Department of Informatics}, fac={The Faculty of Mathematics and Natural Sciences},
   supervisors={Dr. Dennis Gro\ss \and Prof. Kyrre Glette\and Dr. Helge Spieker}, image =  {images/b1efc86c-d976-43a3-92e3-753ef0e114b0}]
 
+\renewcommand*\acffont{\textit}
 
+
+\section*{Acknowledgments}
+
+\section*{List of Acronyms}
+\begin{acronym}[ICANN]
+    \acro  {rl}   [RL]   {Reinforcement Learning}
+    \acro  {xrl} [XRL] {Explainable Reinforcement Learning}
+    \acro  {ai}   [AI]   {Artificial Intelligence}
+    \acro  {xai}  [XAI]  {Explainable Artificial Intelligence}    % will not be listed, as it is not used
+    \acro  {marl}  [MARL]  {Multi Agent Reinforcement Learning}
+    \acro  {mdp}  [MDP]  {Markov Decision Process}
+    \acro  {dqn}  [DQN]  {Deep Q-Network}
+    \acro  {ppo}  [PPO]  {Proximal Policy Optimization}
+    \acro  {drl}  [DRL]  {Deep Reinforcement Learning}
+    \acro  {rnn}  [RNN]  {Recurrent Neural Network}
+    \acro  {mbrl}  [MBRL]  {Model-Based Reinforcement Learning}
+    \acro  {llm}  [LLM]  {Large Language Model}
+    \acro  {ea}  [EA]  {Evolutionary Algorithm}
+    \acro  {nsga}  [NSGA-II]  {Non-Dominated Sorting Genetic Algorithm II}
+    \acro  {nn}  [NN]  {Neural Network}
+\end{acronym}
+
+
+\abstract
+This is the abstract
+
+\lefthyphenmin=1000
 \tableofcontents
 
 \chapter{Introduction}
 
-Sequential decision-making problems, where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems Reinforcement Learning (RL) systems are used. RL, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:environment}. In a Multi-Agent Reinforcement Learning (MARL) system, we would have multiple agents.
+\section{Motivation}
+The motivation behind this research comes from the challenge of interpreting and trusting \ac{rl} systems, particularly in \ac{marl} environments. RL models have achieved significant success in many applications, they often suffer from the "black box" problem, where their decision-making processes remain opaque. This lack of transparency could prove a significant risk in safety-critical applications such as autonomous driving. Without understanding why an agent makes a decision, deploying \ac{drl}-based systems in real-world scenarios becomes problematic.
+\section{Problem statement}
+\section{Scope and limitations}
+\section{Research methods}
+\section{Ethical considerations}
+\section{Main contributions}
+\section{Thesis outline}
+This thesis will be structured as follows:
+\begin{itemize}
+    \item \textbf{Chapter 2: Background and related works}\\
+        This chapter will introduce important concepts, both \ac{rl} and explainability related, and briefly discuss the history of \ac{xai} methods, and how they are applicable to my use case. We will also consider \ac{xrl} methods that are already developed and how to expand or integrate them into developed methods of our own.
 
-\begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/Basic-structure-of-reinforcement-learning-The-agent-can-observe-the-states-of-the.png}
-	\caption{Structure of a simple RL system as found in Review of Learning-Assisted Power System Optimization \cite{unknown}}
-	\label{fig:environment}
+    \item \textbf{Chapter 3: Methodology}\\
+        This chapter discusses the specific principles, procedures and techniques used to conduct the \ac{xrl} research done in this thesis, to ensure that the results we get are valid and reliable.
+
+    \item \textbf{Chapter 4: Experiments}\\
+        This chapter details the setup, results and analysis of the specific experiments we use to evaluate the hypothesis and answer research questions based on certain evaluation metrics, and baseline comparisons.
+
+    \item \textbf{Chapter 5: Discussion}\\
+        This chapter will analyze the results of the experiments and discuss their implication for \ac{xrl} research. It will also contain the limitations of our work and briefly discuss how to expand on any research done.
+
+
+\end{itemize}
+
+
+\begin{figure}
+\begin{center}
+
+    \hspace{-4cm}
+    \begin{tikzpicture}[>=Latex, node distance=2.5cm, auto, font=\small]
+    % Agent Node (with Policy and Value Networks)
+    \node[draw, thick, rectangle, fill=blue!20, minimum width=3cm, minimum height=2cm, align=center] (agent)
+    at (-4,3) {Agent \\ \(\pi_\theta(s)\) \\ \(V_\phi(s)\)};
+
+    % Environment Node
+    \node[draw, thick, rectangle, fill=green!20, minimum width=3cm, minimum height=2cm, align=center] (env)
+    at (4,3) {Environment};
+
+    % Arrow: Agent to Environment (Action)
+    \draw[->, thick] (agent.east) -- node[above] {\(a_t\)} (env.west);
+
+    % Rollout/Trajectory Buffer Node
+    \node[draw, thick, rectangle, fill=yellow!20, minimum width=4cm, minimum height=1.5cm, align=center] (buffer)
+    at (0,0.5) {Rollout/Trajectory Buffer \\ \((s_t,\, a_t,\, r_t,\, s_{t+1})\)};
+
+    % Arrow: Environment to Rollout Buffer (State & Reward)
+    \draw[->, thick] (env.south) .. controls +(0,-1) and +(2,1) .. node[right] {\(s_{t+1},\, r_{t+1}\)} (buffer.east);
+
+
+    % Arrow: Agent to Rollout Buffer (State, Action, Reward)
+    \draw[->, thick] (agent.south) .. controls +(0,-1) and +(-2,1) .. node[left] {\(s_t, a_t, r_t\)} (buffer.west);
+
+    % PPO Update Node
+    \node[draw, thick, rectangle, fill=red!20, minimum width=4cm, minimum height=2cm, align=center] (ppo)
+    at (0,-3) {PPO Update \\ \(\bullet\) Compute Advantages \\ \(\bullet\) Clip Objective \\ \(\bullet\) Update \(\pi_\theta\) and \(V_\phi\)};
+
+    % Arrow: Rollout Buffer to PPO Update
+    \draw[->, thick] (buffer.south) -- node[right] {Optimize PPO Objective} (ppo.north);
+
+    % Arrow: PPO Update to Agent (New Parameters)
+    \draw[->, thick] (ppo.west) .. controls +(-7,0) and +(0,0) .. node[right] {New parameters \(\theta, \phi\)} (agent.west);
+
+\end{tikzpicture}
+\caption{Diagram showing the PPO update algorithm}
+\label{fig:rl_basics}
+\end{center}
 \end{figure}
 
-A significant problem with many deep machine learning models, including MARL policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a MARL system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
+Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
+
+A significant problem with many deep machine learning models, including \ac{marl} policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a \ac{marl} system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
 
 All this essentially means, until the black box problem is solved, autopilot will always require a driver behind the wheel\cite{tian2018deeptest}. Despite having high accuracy, precision and recall, a reinforcement learning model might choose a less than preferable action in edge cases or states not well covered by training and test sets, for example driving on snowy roads when all images in the training data is from warmer climates, or combinations that aren't well covered, like a foggy, snowy road with a sharp right turn.
-With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a MARL setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
+With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a \ac{marl} setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
 
-Explainable Artificial Intelligence (XAI) is an umbrella term for all explainable artificial intelligence. The focus of this paper will be to rework and apply methods for general XAI to Reinforcement Learning (XRL). In particular we will focus on an agent and how the expected future states of other agents will affect it in its decision making process. The environment we will focus on is a MARL environment known as Knights Archers Zombies \cite{KAZ} made for Python. We use this because it is a cooperative environment where each agent has to consider other agents, both of the same type as itself, and other types. If we used an environment where all the agents are identical, our findings will be less useful for other environments where the agents aren't identical. In many real life scenarios agents will not be identical. If we once again consider autonomous vehicles, most vehicles are different in some way. A very obvious example of this is considering cars and motorcycles. Where because of their size difference, their paths chosen will often be different.
+The focus of this paper will be to rework and apply methods for general \ac{xai} to Reinforcement Learning, and expand on \ac{xrl} methods already developed. In particular we will focus on an agent and how the expected future states of other agents will affect it in its decision making process. The environment we will focus on is a \ac{marl} environment known as Knights Archers Zombies \cite{KAZ} made for Python. We use this because it is a cooperative environment where each agent has to consider other agents, both of the same type as itself, and other types. If we used an environment where all the agents are identical, our findings will be less useful for other environments where the agents aren't identical. In many real life scenarios agents will not be identical. If we once again consider autonomous vehicles, most vehicles are different in some way. A very obvious example of this is considering cars and motorcycles. Where because of their size difference, their paths chosen will often be different.
 
-In psychology it is well known that most human based decisions are made with intent\cite{inbook}, and by focusing on the expectation of what future states will look like we can consider this the intent of the agent. If we are accurately able to extract the intent of an RL policy we are better able to explain the choice made and we are more comfortable with trusting that the choice made is a good decision.
+In psychology it is well known that most human based decisions are made with intent\cite{inbook}, and by focusing on the expectation of what future states will look like we can consider this the intent of the agent. If we are accurately able to extract the intent of an \ac{rl} policy we are better able to explain the choice made and we are more comfortable with trusting that the choice made is a good decision. Concretely we hypothesise that by analyzing expected future states and events we could find the intent of the agent, which we could use to ensure the agent acts in a safe or desirable manner. The main question we aim to answer is what information, found in weights or design of the policy, or information extracted by knowing the weights and design, is the most important for separate prediction models to be able to predict future states and actions, in cases where we do not have access to a decent world model, or such a model does not exist.
 
-We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. First we will go a bit more in depth on what type of explainablity we want to use as well as describe relevant methods already used, then we will attempt to integrate previous and own methods into a MARL policy we construct and train, and at the end we will discuss our findings.
+We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. First we will go a bit more in depth on what type of explainablity we want to use as well as describe relevant methods already used, then we will attempt to integrate previous and own methods into a \ac{marl} policy we construct and train, and at the end we will discuss our findings.
 
 \medskip
-\chapter{Background}
+\chapter{Background and Related Works}
 
-\section{Post hoc vs. intrinsically explainable models}
+\section{Reinforcement Learning Fundamentals}
+\subsection{Markov Decision Process in Reinforcement Learning}
+
+A \ac{mdp} is a framework used to model decision-making in stochastic environments, like we want to in an \ac{rl} task. It is defined by a tuple with 5 elements:
+
+\[
+\mathcal{M} = (\mathcal{S}, \mathcal{A}, P, R, \gamma)
+\]
+
+where \(\mathcal{S}\) is the set of possible states, \(\mathcal{A}\) is the set of possible actions, \(P(s' | s, a)\) is the transition probability function, which defines the probability of moving to state \(s'\) when action \(a\) is taken in state \(s\), \(R(s, a, s')\) is the reward function that provides a reward for transitioning from state \(s\) to \(s'\) via action \(a\), \(\gamma \in [0,1]\) is the discount factor that determines the importance of future rewards.
+
+The objective in an \ac{mdp} is to find a policy \(\pi(s)\) that maximizes the expected cumulative reward:
+
+\[
+V^\pi(s) = \mathbb{E} \left[ \sum_{t=0}^{\infty} \gamma^t R(s_t, a_t, s_{t+1}) \mid \pi \right]
+\]
+
+where \(V^\pi(s)\) is the value function that represents the expected return starting from state \(s\) and following policy \(\pi\). See figure \ref{fig:rl_basics}.
+
+
+\subsection{Markoc Decision Process in Multi Agent Reinforcement Learning}
+In a \ac{marl} setting agents could have shared or independent \acp{mdp} depending on architecture. There are three main branches of \ac{marl}, cooperative, competitive and mixed. Our focus will be on cooperative \ac{marl}.
+In a cooperative \ac{marl} setting the goal is some social welfare function that maximises rewards for the agents, either collective rewards or a mix of collective and individual rewards. In such a setting each agent has \ac{mdp}. Assuming that state space \(\mathcal{S}\) and discount factor \(\gamma\) is shared, which they will be in all my experiments, if two agents have the same reward structure $R$ and action space \(\mathcal{A}\) their objective would be the same, in which case they could share policy \(\pi\) and could therefore share \(\mathcal{M}\).
+
+\subsection{Deep Reinforcement Learning}
+Traditional RL methods struggle with scalability due to the fact that they rely on discrete state representations. DRL uses deep \acp{nn} to approximate the policy function $\pi_\theta(s)$, the value function $V_\phi(s)$, or the Q-function $Q_\theta(s,a)$, making it possible to represent these functions in continuous and complex environments. See figure \ref{fig:neural_network}. Input layer is size of state for all three functions. Output layer is size of action space for $Q_\theta(s,a)$ and $\pi_\theta(s)$. $V_\phi(s)$ only has one output node. In a feed forward \ac{nn} like we have here each node has the value of some activation function $\phi(x)$ where $x$ is the sum of nodes of the previous layer multiplied by their respective weights, usually as well as adding some bias, shown as the connections between the nodes. Common activation functions are $ReLU(x) = max(0,v)$ and $tanh=\frac{e^v-e^v}{e^v+e^v}$ where $v$ is the value before activation.
+\begin{figure}[H]
+    \begin{center}
+    \begin{tikzpicture}[
+        x=2.2cm, y=1.4cm, 
+        mynode/.style={thick, draw=black, circle, minimum size=22}, % Base style
+        inputnode/.style={mynode, fill=blue!35},  % Input layer
+        hiddennode/.style={mynode, fill=red!35}, % Hidden layers
+        outputnode/.style={mynode, fill=green!35} % Output layer
+    ]
+    
+    \readlist\Nnod{4,5,5,5,3} % Number of nodes per layer
+    
+    \foreachitem \N \in \Nnod{ % Loop over layers
+        \foreach \i [evaluate={\x=\Ncnt; \y=\N/2-\i+0.5; \prev=int(\Ncnt-1);}] in {1,...,\N}{ 
+            
+            % Choose color based on layer type
+            \ifnum\Ncnt=1
+                \node[inputnode] (N\Ncnt-\i) at (\x,\y) {}; % Input layer
+            \else
+                \ifnum\Ncnt=\Nnodlen
+                    \node[outputnode] (N\Ncnt-\i) at (\x,\y) {}; % Output layer
+                \else
+                    \node[hiddennode] (N\Ncnt-\i) at (\x,\y) {}; % Hidden layer
+                \fi
+            \fi
+            
+            % Connect to previous layer
+            \ifnum\Ncnt>1  
+                \foreach \j in {1,...,\Nnod[\prev]}{ 
+                    \draw[thick] (N\prev-\j) -- (N\Ncnt-\i); 
+                }
+            \fi 
+        }
+    }
+    
+    \node[align=center, below=1] at (N1-4.90) {Input Layer};
+    \node[align=center, below=1] at (N3-5.90) {Hidden Layers};
+    \node[align=center, below=1] at (N5-3.90) {Output Layer};
+    \end{tikzpicture}
+    \end{center}
+    \caption{Illustration of an example of a \ac{nn} with three hidden layers}
+    \label{fig:neural_network}
+\end{figure}
+
+
+\subsection{Model-Free vs. Model-Based Reinforcement Learning}
+
+Model-based and model-free reinforcement learning differ in how they represent environment transitions. In model-based reinforcement learning, the agent learns or has access to a model of the environment, which includes a transition function \( P(s' | s, a) \) and a reward function \( R(s, a) \) that determines the expected reward for taking action \( a \) in state \( s \) \cite{moerland2022modelbasedreinforcementlearningsurvey}. This allows the agent to simulate future outcomes without taking actions in the real environment. As a result, model-based methods are able to update policies based on imagined rollouts, which increases learning speed compared to executing the real environment transitions. Examples of model-based algorithms are Dyna\cite{10.1145/122344.122377} and DreamerV3\cite{hafner2024masteringdiversedomainsworld}.
+
+In contrast, model-free reinforcement learning does not learn or utilize an explicit model of the environment. Instead, the agent learns by interacting directly with the environment and updating its network weights based on observed rewards. This approach is generally less sample-efficient but is applicable to environments where modeling the transition dynamics isn't feasible. Examples of model-free algorithms include Q-learning, \ac{dqn} \cite{mnih2013playingatarideepreinforcement}, and \ac{ppo} \cite{schulman2017proximalpolicyoptimizationalgorithms}.
+
+Model-based methods enable explicit planning by using the learned environment transitions in methods such as Monte Carlo Tree Search \cite{_wiechowski_2022}, while model-free methods rely on direct experience to optimize behavior. We will be using \ac{ppo} to optimize our algorithms, and will not be using simulations or any other form of explicit planning, ensuring that the methods developed will be applicable in the most amount of environments.
+
+
+\section{Approaches to Explainability in Reinforcement Learning}
+\subsection{Post Hoc vs. Intrinsically Explainable Models}
 This section will discuss benefits and drawbacks of explainable models divided into two main categories, Post hoc models and intrinsically explainable models.
 
 Post hoc explainability refers to finding ways to understand already trained models. Instances where this doesn't pose more of a challenge can often be more efficient as you do not need to construct and train a model, which could often pose an issue both considering time spent and accuracy of the model. Making a model explainable only makes sense if we know it usually makes sensible decisions. There are however issues with making post hoc models.
 
-\subsection{ Temporal aspect}
-RL policies all have a temporal aspect, which means several different actions over a certain period of time might contribute to a singular outcome, this could make it very challenging to pinpoint which actions were made for which outcome, especially if the outcome happens several states after the initial decision was made.
+\subsubsection{Temporal Aspect}
+\ac{rl} policies all have a temporal aspect, which means several different actions over a certain period of time might contribute to a singular outcome, this could make it very challenging to pinpoint which actions were made for which outcome, especially if the outcome happens several states after the initial decision was made.
 
-\subsection{ Nature of black box models}
-Many RL policies, especially deep RL policies, which are the policies we will be working with, have complex inner connections due to the hierarchical structure of learning features in the input, sequences of non linear connections that are very hard to understand without spending a lot of time studying the specific connections learned by a model. It's often very difficult to accurately pinpoint the purpose of a node, especially because we do not know if it even has a purpose at all or it could have a lot of different purposes. Especially in environments with complex observation spaces.
+\subsubsection{Nature of Black Box Models}
+Many \ac{rl} policies, especially deep \ac{rl} policies, which are the policies we will be working with, have complex inner connections due to the hierarchical structure of learning features in the input, sequences of non linear connections that are very hard to understand without spending a lot of time studying the specific connections learned by a model. It's often very difficult to accurately pinpoint the purpose of a node, especially because we do not know if it even has a purpose at all or it could have a lot of different purposes. Especially in environments with complex observation spaces.
 
 
-\subsection{ Lack of transparency}
+\subsubsection{Lack of Transparency}
 Tracing how an observation leads to a state, through the action chosen and the environment, is often challenging in models constructed without this in mind. If we do not know the processing of information of a model it's very hard to explain the rationalisation of an agent.
 
-\subsection{ Intrinsically explainable models}
-Intrinsically explainable models has the aforementioned drawback of relying on model construction to be done well, as we will be unable to use a model that is shown to be accurate, but since it doesn't get as affected by point II.I to II.III it will be the preferred method in this paper.
-
+\subsubsection{Intrinsically Explainable Models}
+Intrinsically explainable models have the already stated drawback of relying on careful model construction, which can be challenging and may compromise model performance. While these models offer transparency from the outset, they are often less flexible and may not achieve the same level of accuracy as more complex \ac{rl} models. Given that we aim to analyze and compare already trained \ac{rl} policies, we will mostly focus on post hoc explainability methods in this thesis.
 
 \medskip
 
-\section{Fidelity of XAI methods}
-It is important to understand why the current XAI methods not meant for RL applications aren't always useful to us.
+\subsection{Fidelity of Explainable Artificial Intelligence Methods}
+It is important to understand why the current \ac{xai} methods not meant for \ac{rl} applications aren't always useful to us.
 
-XAI methods not intended for reinforcement learning often provide\\ explanations that don't necessarily represent the inner workings of an RL policy, because an RL policy has a temporal aspect as well. Broadly these methods can be categorised as feature-based explainers, and they often struggle to fully explain an agents behaviour or specific actions because they cannot capture the future view of an RL policy. 
+\ac{xai} methods not intended for reinforcement learning often provide\\ explanations that don't necessarily represent the inner workings of an \ac{rl} policy, because an \ac{rl} policy has a temporal aspect as well. Broadly these methods can be categorised as feature-based explainers, and they often struggle to fully explain an agents behaviour or specific actions because they cannot capture the future view of an \ac{rl} policy. 
 
-Saliency maps which have been successfully used for classification of images provide explanations about what part of the input was important for the outcome, which is highly relevant for classification tasks, but using the same method for an RL policy doesn't sufficiently explain the intent of the agent\cite{atrey2020exploratory}.
+Saliency maps which have been successfully used for classification of images provide explanations about what part of the input was important for the outcome, which is highly relevant for classification tasks, but using the same method for an \ac{rl} policy doesn't sufficiently explain the intent of the agent\cite{atrey2020exploratory}.
 
-Another commonly used XAI method is model distillation, which works by transferring knowledge from a large model to a smaller, usually interpretable, one, for instance a deep learning network to a decision tree \cite{bastani2019verifiable}. This has use cases in verifyability, but struggles to fully explain the temporal aspect of RL policies, and are therefore not sufficient as an explainer.
+Another commonly used \ac{xai} method is model distillation, which works by transferring knowledge from a large model to a smaller, usually interpretable, one, for instance a deep learning network to a decision tree \cite{bastani2019verifiable}. This has use cases in verifyability, but struggles to fully explain the temporal aspect of \ac{rl} policies, and are therefore not sufficient as an explainer.
 
 However, these methods might still prove insightful in conjunction with other intent-based methods, the state in which a decision is made is obviously very relevant to why that particular decision was made. We could perhaps use these methods to answer questions such as "What part of agent As Observation this state, lead it to believe agent B would end up at these coordinates at a later state?"
 \medskip
 
-\section{Future-based explanations}
+\subsection{Future-Based Explanations}
 Next, I will describe in slightly more detail, what is meant by an intent based explainer, like I want to develop, and how to use it.
 
-\subsection{ Design}
-"Towards Future-Based Explanations for Deep RL Network Controllers"\cite{10.1145/3626570.3626607} broadly describes future-based intrinsically explainable methods. Future-based intrinsically explainable methods for DRL policies often take three inputs, the trajectories experienced by an agent, the environment and the agent. Then, they collect the rewards and interactions and use this information to train an explainer.
+\subsubsection{Design}
+"Towards Future-Based Explanations for Deep RL Network Controllers"\cite{10.1145/3626570.3626607} broadly describes future-based intrinsically explainable methods. Future-based intrinsically explainable methods for \ac{drl} policies often take three inputs, the trajectories experienced by an agent, the environment and the agent. Then, they collect the rewards and interactions and use this information to train an explainer.
 
 During inference, we can then apply the explainer to a state and action to get the expected future consequences of that action. Depending on the architecture we could either get the expected future consequence of any action, or just the one the agent decides on.
 
-\subsection{ Use cases}
+\subsubsection{Use Cases}
 
-Designing a DRL solution requires choosing features in the observation,\\ hyperparameter tuning, policy design and reward function among other things. This is a time, and resource, consuming process. These are usually picked by trial-and-error but could be made easier with assistance from an explainer. See Figure \ref{fig:bitrate}. 
+Designing a \ac{drl} solution requires choosing features in the observation,\\ hyperparameter tuning, policy design and reward function among other things. This is a time, and resource, consuming process. These are usually picked by trial-and-error but could be made easier with assistance from an explainer. % See Figure \ref{fig:bitrate}. 
 
 Another, and perhaps more important, use case is safety. If when online, i.e. the chosen action will actually affect the state, we are expecting high likelihood of an unsafe state, we could instead of opting for the chosen action fall back to a known safe action, that could have a lower expected return, i.e. breaking instead of turning a corner if we have limited vision around the corner.
 
-\begin{figure}
-	\includegraphics[width=\textwidth]{images/dog-final.png}
-	\caption{Using a future-based explainer as debugger to avoid stalling for adaptive bitrate streaming as found in "Towards Future-Based Explanations for Deep RL Network Controllers" \cite{10.1145/3626570.3626607}}
-	\label{fig:bitrate}
-\end{figure}
-\medskip
+% \begin{figure}
+% 	\includegraphics[width=\textwidth]{images/dog-final.png}
+% 	\caption{Using a future-based explainer as debugger to avoid stalling for adaptive bitrate streaming as found in "Towards Future-Based Explanations for Deep \ac{rl} Network Controllers" \cite{10.1145/3626570.3626607}}
+% 	\label{fig:bitrate}
+% \end{figure}
+% \medskip
 
-\subsection{Definition of intent}
+\subsubsection{Definition of Intent}
 We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
 
 
-\section{Relevant methods}
-There are several papers written on XAI and XRL problems. Milani et al.\cite{milani2022survey} categorise XRL into three main categories, feature importance (FI), learning process and MDP (LPM) and Policy-level (PL). FI considers the immediate context for actions, i.e. what part of the input was important for a single action, LPM considers techniques that highlight which experiences in training were influential for the final policy and PL focuses on long term effects and behaviour. Since we are interested in future states and actions we will look at influential trajectories and transitions within these trajectories. It is important to view these transitions in the context of the trajectory to understand the long term effects and not just immediate, which are of less interest in this paper, if we find the state with a high state importance $I(s)$, $I(s) = max_aQ(s,a)-min_aQ(s,a)$ most similar by some similarity measure to an arbitrary current state we could find the resulting trajectory and expect the agent to intend a similar outcome. There are also ways to convert Recurrent Neural Network (RNN) policies to an interpretable models post-hoc, which might be relevant if we use an RNN. This paper will explore PL explainability further.
+\section{Relevant Methods}
+There are several papers written on \ac{xai} and \ac{xrl} problems. Milani et al.\cite{milani2022survey} categorise \ac{xrl} into three main categories, feature importance (FI), learning process and \ac{mdp} (LPM) and Policy-level (PL). FI considers the immediate context for actions, i.e. what part of the input was important for a single action, LPM considers techniques that highlight which experiences in training were influential for the final policy and PL focuses on long term effects and behaviour. Since we are interested in future states and actions we will look at influential trajectories and transitions within these trajectories. It is important to view these transitions in the context of the trajectory to understand the long term effects and not just immediate, which are of less interest in this paper, if we find the state with a high state importance $I(s)$, $I(s) = max_aQ(s,a)-min_aQ(s,a)$ most similar by some similarity measure to an arbitrary current state we could find the resulting trajectory and expect the agent to intend a similar outcome. There are also ways to convert \ac{rnn} policies to an interpretable models post-hoc, which might be relevant if we use an \ac{rnn}. This paper will explore PL explainability further.
 
-In particular "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}, "Explainable Reinforcement Learning via a Causal world model" \cite{yu2024explainable} and "CrystalBox: Future-based explanations for input-driven deep RL systems" \cite{patel2024crystalbox} are highly relevant due to the fact that they all describe temporal connections between current actions and future states or actions.
+In particular "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}, "Explainable Reinforcement Learning via a Causal world model" \cite{yu2024explainable} and "CrystalBox: Future-based explanations for input-driven deep \ac{rl} systems" \cite{patel2024crystalbox} are highly relevant due to the fact that they all describe temporal connections between current actions and future states or actions.
 
-"Are large language models post-hoc explainers" \cite{kroeger2024large} Could be relevant as using other explainers to compare explanations is useful. "ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing RL Policies" \cite{gajcin2024acter} 
+"Are large language models post-hoc explainers" \cite{kroeger2024large} Could be relevant as using other explainers to compare explanations is useful. "ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing \ac{rl} Policies" \cite{gajcin2024acter} 
 
-\subsection{ What did you think would happen? Explaining Agent Behaviour through Intended Outcomes}
-What did you think would happen describes what an agent expects to happen in future states, and why the current action is chosen based on the future expectations. As stated in the paper, a limitation of their method means it doesn't work well with high dimensionality. The two main difference between this paper and the problem i aim to solve is that they're focusing on an environment with a single agent and that our observation space will be high dimensionality. It uses Q-learning and Markov-chains that train simultaneously with a "belief map" that shows what the agent expects the environment to look like in future states. In the simple examples used in the paper it shows where it believes the taxi should drive and therefore chooses an action to follow this path. This is not directly applicable to my thesis as it's unlikely that Q-learning or Markov chains will be viable for the intended model based on the environment. However the paper is successful in explaining an agents underlying motivations and beliefs about the causal nature of the environment, and using similar methods might be an effective means for making MARL agents with higher dimensionality understandable from a human perspective. See Figure \ref{fig:taxi}
+\subsection{What did you think would happen? Explaining Agent Behaviour through Intended Outcomes}
+What did you think would happen describes what an agent expects to happen in future states, and why the current action is chosen based on the future expectations. As stated in the paper, a limitation of their method means it doesn't work well with high dimensionality. The two main difference between this paper and the problem i aim to solve is that they're focusing on an environment with a single agent and that our observation space will be high dimensionality. It uses Q-learning and Markov-chains that train simultaneously with a "belief map" that shows what the agent expects the environment to look like in future states. In the simple examples used in the paper it shows where it believes the taxi should drive and therefore chooses an action to follow this path. This is not directly applicable to my thesis as it's unlikely that Q-learning or Markov chains will be viable for the policy and explainer based on the environment. However the paper is successful in explaining an agents underlying motivations and beliefs about the causal nature of the environment, and using similar methods might be an effective means for making \ac{marl} agents with higher dimensionality understandable from a human perspective. %See Figure \ref{fig:taxi}
 
-\begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/merged_14_dqntaxi.png}
-	\caption{Belief map of a Taxi driving from G to B, where the opacity describes the likelihood of the taxi entering that square as found in "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}}
-	\label{fig:taxi}
-\end{figure}
+% \begin{figure}[!ht]
+% 	\includegraphics[width=\columnwidth]{images/merged_14_dqntaxi.png}
+% 	\caption{Belief map of a Taxi driving from G to B, where the opacity describes the likelihood of the taxi entering that square as found in "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}}
+% 	\label{fig:taxi}
+% \end{figure}
 
-\subsection{ Explainable Reinforcement Learning via a Causal world model}
-Explainable Reinforcement Learning via a Causal world model constructs a sparse model to connect causal relationships, without prior knowledge of the causal relationship, rather than a fully connected one, but they still achieve high accuracy and results comparable to other fully connected Model-Based Reinforcement Learning (MBRL) policies. Which is important, as there is often a trade off between explainability and performance. Using the same model for both explanations and choosing actions also make the explanations faithful to the intentions of the agent. The paper also describes a novel approach to derive causal chains from the causal influence of the actions, which lets us find the intent of the agent. The paper is successful being applied to MBRL, and is also applicable to models with infinite actions spaces, which is a limitation of some other models, see previous sub section.
+\subsection{Explainable Reinforcement Learning via a Causal world model}
+Explainable Reinforcement Learning via a Causal world model constructs a sparse model to connect causal relationships, without prior knowledge of the causal relationship, rather than a fully connected one, but they still achieve high accuracy and results comparable to other fully connected \ac{mbrl} policies. Which is important, as there is often a trade off between explainability and performance. Using the same model for both explanations and choosing actions also make the explanations faithful to the intentions of the agent. The paper also describes a novel approach to derive causal chains from the causal influence of the actions, which lets us find the intent of the agent. The paper is successful being applied to \ac{mbrl}, and is also applicable to models with infinite actions spaces, which is a limitation of some other models, see previous sub section.
 
 A limitation of the paper is that it requires a known factorisation of the environment, denoted by $\langle S, A, O, R, P, T, \gamma \rangle$, where S is state space, A is action space, O is observation space, R is reward function, P is probability function for the probability of transitioning from state $s$ to state $s'$ given action $a$, T is the termination condition given the transition tuple $(s,a,o,s')$, and $\gamma$ is the discount factor. Considering we will be working with hand crafted simulations we will have access to all of these, however its not certain that if we depend on this method that our contributions will be applicable to certain other environments where the factorisation is not known.
 
 
-\subsection{ CrystalBox: Future-Based Explanations for \\Input-Driven Deep RL Systems}
-CrystalBox introduces a model-agnostic, post-hoc, future based explanation for DRL. It doesn't require altering the controller, and works by decomposing the future rewards into its individual components. While this isn't exactly the kind of explanation we are looking for, it could be a great tool in developing an explainer that considers other agents actions in a multi agent cooperative environment, which is the goal of our paper, because it is post-hoc, and easily deployable. Especially because it was constructed for input-driven environments. The original paper claims it offers high fidelity solutions for both discrete and continuous action spaces. KAZ has a discrete action space but we might do some work with other environments as well.
+\subsection{CrystalBox: Future-Based Explanations for Input-Driven Deep Reinforcement Learning Systems}
+CrystalBox introduces a model-agnostic, post-hoc, future based explanation for \ac{drl}. It doesn't require altering the controller, and works by decomposing the future rewards into its individual components. While this isn't exactly the kind of explanation we are looking for, it could be a great tool in developing an explainer that considers other agents actions in a multi agent cooperative environment, which is the goal of our paper, because it is post-hoc, and easily deployable. Especially because it was constructed for input-driven environments. The original paper claims it offers high fidelity solutions for both discrete and continuous action spaces. KAZ has a discrete action space but we might do some work with other environments as well.
 
 It's not certain to be useful because it works by decomposing the reward function, and it's not safe to assume the reward function will even be useful to decompose.
 
 
-\subsection{ Are Large Language Models Post Hoc Explainers}
-A Large Language Model (LLM) is a predictive model that generates text based on a prompt you give it, be it continuing the prompt or responding, and can often give the impression of comprehension of human language and a deeper understanding of the topic at hand.  The paper aims to investigate the question "Can LLMs explain the behaviour of other complex predictive models?" by exploiting the in-context learning (ICL) capabilities of LLMs. ICL allows LLMs to perform well on new tasks by using a few task samples in the prompt. A benefit of using an LLM as a post-hoc explainer, is that the output given by the model will already be written in natural language and should be understandable by a layman. The paper presumes that the local behaviour of a model is a linear decision boundary, and by using a sample x and perturbing it to x', and presenting both the samples and the perturbation as natural language we could get an explanation from the LLM for the outcome. With a sufficient number of perturbations in a neighbourhood around x the LLM is expected to explain the behaviour in this neighbourhood, and rank the features in order of importance.
+\subsection{Are Large Language Models Post Hoc Explainers}
+A \ac{llm} is a predictive model that generates text based on a prompt you give it, be it continuing the prompt or responding, and can often give the impression of comprehension of human language and a deeper understanding of the topic at hand.  The paper aims to investigate the question "Can LLMs explain the behaviour of other complex predictive models?" by exploiting the in-context learning (ICL) capabilities of \acp{llm}. ICL allows \acp{llm} to perform well on new tasks by using a few task samples in the prompt. A benefit of using an \ac{llm} as a post-hoc explainer, is that the output given by the model will already be written in natural language and should be understandable by a layman. The paper presumes that the local behaviour of a model is a linear decision boundary, and by using a sample x and perturbing it to x', and presenting both the samples and the perturbation as natural language we could get an explanation from the \ac{llm} for the outcome. With a sufficient number of perturbations in a neighbourhood around x the \ac{llm} is expected to explain the behaviour in this neighbourhood, and rank the features in order of importance.
 
-While the faithfulness of the LLM as an explainer is on par with other XAI methods used for classification, meaning that the reasons provided are enough to explain the output, I am sceptical of the fidelity of the LLM for two reasons. One is the same as for why other XAI models often struggle with fidelity, the temporal aspect. If applied in the same way as in the paper it would not consider the intent or the past and only what part of the current observation made it make a certain decision. The other is that I am sceptical of claims presented by an LLM in general as these are all just guesses. Good guesses a lot of the time, but still just guesses. 
+While the faithfulness of the \ac{llm} as an explainer is on par with other \ac{xai} methods used for classification, meaning that the reasons provided are enough to explain the output, I am sceptical of the fidelity of the \ac{llm} for two reasons. One is the same as for why other \ac{xai} models often struggle with fidelity, the temporal aspect. If applied in the same way as in the paper it would not consider the intent or the past and only what part of the current observation made it make a certain decision. The other is that I am sceptical of claims presented by an \ac{llm} in general as these are all just guesses. Good guesses a lot of the time, but still just guesses. 
 
 We could however potentially change the implementation so it considers the temporal aspect, and this might be a viable post hoc explainer after some more research into prompt engineering.
 
 
-\subsection{ ACTER: Diverse and Actionable Counterfactual\\ Sequences for Explaining and Diagnosing RL Policies}
+\subsection{ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing Reinforcement Learning Policies}
 \label{sec:acter}
-The paper presents ACTER, an algorithm that uses counterfactual sequences with actionable advice on how to avoid failure for an RL policy. It does this by using an evolutionary algorithm (EA) known as NSGA-II to generate counterfactual sequences that don't lead to failure as close as possible to factual sequences that lead to failure. This paper presents counterfactual sequences and not just actions, which means it also presents how to avoid the state that lead to failure to begin with, which should, if ACTER is implemented correctly, allow us to significantly reduce the amount of times our policy fails. It also offers multiple counterfactuals to allow the end user to decide which counterfactual is preferable to their use case.
+The paper presents ACTER, an algorithm that uses counterfactual sequences with actionable advice on how to avoid failure for an \ac{rl} policy. It does this by using an \ac{ea} known as \ac{nsga} to generate counterfactual sequences that don't lead to failure as close as possible to factual sequences that lead to failure. This paper presents counterfactual sequences and not just actions, which means it also presents how to avoid the state that lead to failure to begin with, which should, if ACTER is implemented correctly, allow us to significantly reduce the amount of times our policy fails. It also offers multiple counterfactuals to allow the end user to decide which counterfactual is preferable to their use case.
 
-There are 4 hypothesises tested by the paper. The last two considers laymen users and are therefore not as interesting to us. The first two however "ACTER can produce counterfactual sequences that prevent failure with lower effort and higher certainty in stochastic environments compared to the baselines." and "ACTER can produce a set of counterfactual sequences that offer more diverse ways of preventing failure compared to the baselines." are partially and fully confirmed respectively. Which means ACTER will likely be a useful tool to explain and diagnose our RL policy.
+There are 4 hypothesises tested by the paper. The last two considers laymen users and are therefore not as interesting to us. The first two however "ACTER can produce counterfactual sequences that prevent failure with lower effort and higher certainty in stochastic environments compared to the baselines." and "ACTER can produce a set of counterfactual sequences that offer more diverse ways of preventing failure compared to the baselines." are partially and fully confirmed respectively. Which means ACTER will likely be a useful tool to explain and diagnose our \ac{rl} policy.
 
+
+\section{Related Works}
+\subsection{Predicting Future Actions Of Reinforcement Learning Agents}
+\subsection{An Investigation of Model Free Planning}
+\subsection{Stabilizing Transformers for Reinforcement Learning}
 
 \medskip
 \chapter{Methodology}
@@ -148,7 +333,7 @@ There are 4 hypothesises tested by the paper. The last two considers laymen user
 \section{Action importance}
 \subsection{Counterfactual sequences}
 \label{sec:counterfactual}
-To discover counterfactual sequences we use the EA known as NSGA-II (Non dominated Sorting Genetic Algorithm II). This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
+To discover counterfactual sequences we use the \ac{ea} known as \ac{nsga}. This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
 We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. See figure \ref{fig:pareto_model}. 
 In the case of continuous actions we instead alter actions in multiple timesteps and use a distance measure that we want to minimize. The reward objective is similar to the case of discrete actions. See figure \ref{fig:pareto}.
 
@@ -193,13 +378,13 @@ In the case of continuous actions we instead alter actions in multiple timesteps
 
 \begin{figure}[!ht]
 	\includegraphics[width=\columnwidth]{images/best_counterfactuals.pdf}
-	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with NSGA-II}
+	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
 	\label{fig:pareto} 
 \end{figure}
 
 \begin{figure}[!ht]
 	\includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
-	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with NSGA-II}
+	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
 	\label{fig:pareto_model} 
 \end{figure}
 
@@ -222,15 +407,15 @@ The Shapley value can help us understand how the policy acts in general. We can 
 \caption{Shapley Values for Feature Importance in Reinforcement Learning}
 \label{alg:shapley}
 \begin{algorithmic}
-    \State \textbf{Input:} RL policy $\pi_\theta$, set of features $F$
+    \State \textbf{Input:} \ac{rl} policy $\pi_\theta$, set of features $F$
     \State \textbf{Output:} Shapley values $\phi_f$ for each feature $f \in F$
     \State $\phi_f \gets 0 \; \forall f \in F$ \Comment{Initialize Shapley values to zero}
     \State $n \gets |F|$ \Comment{Number of features}
     
     \ForAll{$f \in F$}
         \ForAll{$S \subseteq F \setminus \{f\}$}
-            \State $V_S \gets \texttt{value}(\pi_\theta, S)$ \Comment{Evaluate RL model $\pi_\theta$ with feature set $S$}
-            \State $V_{S \cup \{f\}} \gets \texttt{value}(\pi_\theta, S \cup \{f\})$ \Comment{Evaluate RL model $\pi_\theta$ with feature set $S \cup \{f\}$}
+            \State $V_S \gets \texttt{value}(\pi_\theta, S)$ \Comment{Evaluate \ac{rl} model $\pi_\theta$ with feature set $S$}
+            \State $V_{S \cup \{f\}} \gets \texttt{value}(\pi_\theta, S \cup \{f\})$ \Comment{Evaluate \ac{rl} model $\pi_\theta$ with feature set $S \cup \{f\}$}
             
             \State $\phi_f \gets \phi_f + \frac{|S|!(n - |S| - 1)!}{n!} \left(V_{S \cup \{f\}} - V_S\right)$
             \Comment{Update Shapley value for feature $f$}
@@ -238,7 +423,7 @@ The Shapley value can help us understand how the policy acts in general. We can 
     \EndFor
     
     \Function{value}{$\pi_\theta, S$}
-        \State \textbf{Input:} RL model $\pi_\theta$, feature set $S$
+        \State \textbf{Input:} \ac{rl} model $\pi_\theta$, feature set $S$
         \State \textbf{Output:} Model performance with feature set $S$
         
         \State $\texttt{Train model } \pi_\theta \texttt{ using features in } S$
@@ -256,7 +441,7 @@ By integrating the gradient of the model prediction when going from a specified 
 \caption{Integrated Gradients for Feature Importance in Reinforcement Learning}
 \label{alg:intgrad}
 \begin{algorithmic}
-    \State \textbf{Input:} RL policy $\pi_\theta$, input $x$, baseline input $\bar{x}$, number of steps $m$
+    \State \textbf{Input:} \ac{rl} policy $\pi_\theta$, input $x$, baseline input $\bar{x}$, number of steps $m$
     \State \textbf{Output:} Integrated gradients $\texttt{IG}(x, \bar{x})$
     \State $\texttt{IG}(x, \bar{x}) \gets 0 \; \forall f \in \texttt{features of } x$ \Comment{Initialize integrated gradients to zero}
     
@@ -269,7 +454,7 @@ By integrating the gradient of the model prediction when going from a specified 
     \EndFor
     
     \Function{value}{$\pi_\theta, x$}
-        \State \textbf{Input:} RL policy $\pi_\theta$, input $x$
+        \State \textbf{Input:} \ac{rl} policy $\pi_\theta$, input $x$
         \State \textbf{Output:} Model prediction for input $x$
         
         \State $\texttt{Feed input } x \texttt{ to policy } \pi_\theta$
@@ -309,29 +494,8 @@ After 200 epochs the base prediction model reached a evaluation loss of 0.0407, 
 	\label{fig:pred_loss_one-hot} 
 \end{figure}
 
-\section{--IPPO vs MAPPO}
-Using IPPO for now because \cite{dewitt2020independentlearningneedstarcraft}. Should be enough for explainability.
-
-
-\section{--Reward function changes?}
-
-\section{--How to identify intent}
-
 \section{--Synergy/intent collision}
 Cooperation index
-
-\section{--Lazy agents/sparse rewards}
-archers train fine, knights only start learning anything useful after a very long time, ~12M timesteps, then not stable
-
--alternate reward structure?
-
--memories to focus more on knights?
-
--policy architecture?
-
--start with only training knights at first then add archers as well? (eg. 4 knights -> 2 knights, 2 archers) for consistent action and observation space. Similar to using a reward structure where only knights gain rewards for n timesteps before both knights and archers gain rewards. 
-
--Possible to not have the same reward for every agent, but then no centralised critic
 
 \section{--Same intent for same state? Different policies?}
 Swap homogeneous agents to see intent difference
@@ -340,9 +504,37 @@ Swap homogeneous agents to see intent difference
 
 \section{--Feature importance}
 Detect which zombies agents care about
-saliency maps
 
 \section{--Feature permutation changes, for other agents and zombies}
-\bibliography{ref}{}
-\bibliographystyle{unsrt}
+
+
+\chapter{Experiments}
+
+\section{General experimental setup}
+
+\section{Experiment 1}
+\subsection{Setup}
+\subsection{Results}
+\subsection{Analysis}
+
+\section{Experiment 2}
+\subsection{Setup}
+\subsection{Results}
+\subsection{Analysis}
+
+\section{Experiment 3}
+\subsection{Setup}
+\subsection{Results}
+\subsection{Analysis}
+
+\chapter{Discussion}
+
+\section{Conclusion}
+
+\section{Limitations}
+
+\section{Future work}
+
+
+\printbibliography{}
 \end{document}
