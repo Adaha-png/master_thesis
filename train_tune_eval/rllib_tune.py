@@ -15,13 +15,13 @@ from rllib_train import env_creator, run_inference, run_train
 load_dotenv()
 
 
-def optim(tuner, trials, jobs):
+def optim(tuner, trials, jobs, memory="none"):
     env = env_creator()
     study = optuna.create_study(
-        study_name=f".{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
+        study_name=f".{env.metadata['name']}/{memory}/{os.environ['RL_TUNING_PATH']}/tuning.db",
         direction="maximize",
         load_if_exists=True,
-        storage=f"sqlite:///.{env.metadata['name']}/tuning.db",
+        storage=f"sqlite:///.{env.metadata['name']}/{memory}/tuning.db",
     )
 
     study.optimize(

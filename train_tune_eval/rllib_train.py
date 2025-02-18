@@ -1,13 +1,17 @@
 import glob
+import multiprocessing
 import os
 import pickle
+import random
 import warnings
 
 import imageio
 import numpy as np
 import optuna
 import ray
+import ray.train.torch
 import supersuit as ss
+import torch
 from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
@@ -19,23 +23,24 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
 
 
-def simple_spread_env(config=None):
+def simple_spread_env(config):
     env_kwargs = dict(
         N=3,
-        local_ratio=0.2,
+        local_ratio=0,
         max_cycles=25,
         continuous_actions=False,
         render_mode="rgb_array",
     )
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
+    env = ss.frame_stack_v2(env)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
     return env
 
 
-def kaz_env(config=None):
+def kaz_env(config):
     env_fn = knights_archers_zombies_v10
 
     env_kwargs = dict(
@@ -50,15 +55,18 @@ def kaz_env(config=None):
 
     env = env_fn.parallel_env(**env_kwargs)
 
+    # env = ss.frame_stack_v2(env)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
-    env.reset()
+    env.reset(seed=config["seed"])
 
     return env
 
 
-def env_creator(config=None):
-    return simple_spread_env(config)
+def env_creator(config={}):
+    random.seed = 42
+    config["seed"] = random.randint(0, 1000000000)
+    return kaz_env(config)
 
 
 def run_train(
@@ -67,6 +75,7 @@ def run_train(
     max_timesteps=2_000_000,
     seed=0,
     tuning=False,
+    memory="none",
 ):
     ray.init()
 
@@ -81,6 +90,33 @@ def run_train(
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
     steps_per_iter = 20000
 
+    model_dict = {
+        "fcnet_hiddens": [64, 64],
+        "fcnet_activation": "tanh",
+    }
+
+    if memory == "lstm":
+        model_dict.update(
+            {
+                "use_lstm": True,
+                "lstm_cell_size": 64,
+                "max_seq_len": 20,
+                "lstm_use_prev_action": True,
+                "lstm_use_prev_reward": True,
+            }
+        )
+    elif memory == "attention":
+        model_dict.update(
+            {
+                "use_attention": True,
+                "attention_dim": 64,
+                "attention_num_transformer_units": 2,
+                "attention_num_heads": 2,
+                "attention_memory_training": 30,  # Short-term memory
+                "attention_memory_inference": 30,
+            }
+        )
+
     config = (
         PPOConfig()
         .environment(
@@ -88,23 +124,11 @@ def run_train(
             disable_env_checking=True,
         )
         .framework("torch")
-        .env_runners(num_env_runners=15)
+        .env_runners(
+            num_env_runners=max(multiprocessing.cpu_count() - 2, 1),
+        )
         .training(
-            model={
-                "fcnet_hiddens": [32, 32],
-                "fcnet_activation": "tanh",
-                # "use_lstm": True,
-                # "lstm_cell_size": 64,
-                # "max_seq_len": 20,
-                # "lstm_use_prev_action": True,
-                # "lstm_use_prev_reward": True,
-                # "use_attention": True,
-                # "attention_dim": 64,
-                # "attention_num_transformer_units": 2,
-                # "attention_num_heads": 2,
-                # "attention_memory_training": 30,  # Short-term memory
-                # "attention_memory_inference": 30,
-            },
+            model=model_dict,
             train_batch_size=steps_per_iter,
             minibatch_size=512,
             lr=lr,
@@ -130,9 +154,8 @@ def run_train(
             enable_env_runner_and_connector_v2=False,
         )
     )
-
     temp_env.close()
-    # 5. Build the PPO algorithm
+    config["seed"] = seed
     algo = config.build()
 
     # 6. Training Loop
@@ -148,11 +171,11 @@ def run_train(
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
                 algo.save(
-                    checkpoint_dir=f".{env_name}/{os.environ['RL_TRAINING_PATH']}"
+                    checkpoint_dir=f".{env_name}/{memory}/{os.environ['RL_TRAINING_PATH']}"
                 )
 
     if tuning:
-        algo.save(checkpoint_dir=f".{env_name}/{os.environ['RL_TUNING_PATH']}")
+        algo.save(checkpoint_dir=f".{env_name}/{memory}/{os.environ['RL_TUNING_PATH']}")
 
     algo.stop()
     ray.shutdown()
@@ -188,7 +211,7 @@ def run_inference(algo, num_episodes: int = 100):
     return total_reward / num_episodes
 
 
-def watch_single_episode():
+def record_episode():
     """
     Loads a trained policy from ./<env_name>/policy and plays a single episode
     in the corresponding PettingZoo environment, rendering each step.
@@ -216,7 +239,7 @@ def watch_single_episode():
         actions = {}
         # Gather actions for each agent from the loaded policy
         for agent, obs in observations.items():
-            action = algo.compute_single_action(obs, policy_id="agent")
+            action = algo.compute_single_action(obs, policy_id=agent.split("_")[0])
             actions[agent] = action
 
         # Step the environment
@@ -230,7 +253,6 @@ def watch_single_episode():
     env.close()
 
     video_filename = f".{env_name}/episode.mp4"
-    print(video_filename)
     imageio.mimsave(video_filename, frames, fps=10)
     print(f"Video saved to {video_filename}")
 
@@ -239,19 +261,25 @@ def watch_single_episode():
 
 
 if __name__ == "__main__":
+    seed = 42
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
     env = env_creator()
-    #
-    # study = optuna.load_study(
-    #     study_name=f".{env.metadata['name']}/tuning.db",
-    #     storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
-    # )
-    #
-    # trial = study.best_trial
-    # env.close()
+    study = optuna.load_study(
+        study_name=f".{env.metadata['name']}/tuning.db",
+        storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
+    )
+
+    trial = study.best_trial
+    env.close()
+
     # gamma = trial.suggest_float("gamma", 0.8, 0.999)
     # lr = trial.suggest_float("lr", 1e-5, 1, log=True)
 
-    # lr = 2e-3
-    # gamma = 0.99
-    # run_train(gamma=gamma, lr=lr, max_timesteps=2_000_000)
-    watch_single_episode()
+    lr = 2e-5
+    gamma = 0.97
+    run_train(gamma=gamma, lr=lr, max_timesteps=2_000_000, seed=seed)
+    record_episode()
