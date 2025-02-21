@@ -31,12 +31,49 @@ def simple_spread_env(config):
         continuous_actions=False,
         render_mode="rgb_array",
     )
+
+    N = int(env_kwargs["N"])
+
+    feature_base_names = ["vel x", "vel y", "pos x", "pos y"]
+
+    landmark_feature_names = [f"landmark {i} x" for i in range(1, N + 1)] + [
+        f"landmark {i} y" for i in range(1, N + 1)
+    ]
+    landmark_feature_names = [
+        feature
+        for i in range(1, N + 1)
+        for feature in (f"landmark {i} x", f"landmark {i} y")
+    ]
+
+    agent_feature_names = [
+        feature for i in range(2, N + 1) for feature in (f"agent {i} x", f"agent {i} y")
+    ]
+
+    comms_feature_names = [f"comms {i}" for i in range(1, 5)]
+
+    feature_names = (
+        feature_base_names
+        + landmark_feature_names
+        + agent_feature_names
+        + comms_feature_names
+    )
+    act_dict = {
+        0: "no action",
+        1: "move left",
+        2: "move right",
+        3: "move down",
+        4: "move up",
+    }
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
     env = ss.frame_stack_v2(env)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
+
+    setattr(env, "act_dict", act_dict)
+    setattr(env, "feature_names", feature_names)
+
     return env
 
 
@@ -53,6 +90,39 @@ def kaz_env(config):
         vector_state=True,
     )
 
+    n = (
+        env_kwargs["num_archers"]
+        + 2 * env_kwargs["num_knights"]
+        + env_kwargs["max_arrows"]
+        + env_kwargs["max_zombies"]
+    )
+
+    feature_names = [
+        "dist self",
+        "pos x self",
+        "pos y self",
+        "vel x self",
+        "vel y self",
+    ]
+    for i in range(n - 1):
+        # first entities are archers, then knights, then swords, then arrows then zombies.
+        feature_names.extend(
+            [
+                f"dist ent {i}",
+                "rel pos x ent {i}",
+                "rel pos y ent {i}",
+                "vel x ent {i}",
+                "vel y ent {i}",
+            ]
+        )
+    act_dict = {
+        0: "idle",
+        1: "rotate clockwise",
+        2: "rotate counter clockwise",
+        3: "move forwards",
+        4: "move backwards",
+        5: "attack",
+    }
     env = env_fn.parallel_env(**env_kwargs)
 
     # env = ss.frame_stack_v2(env)
@@ -60,11 +130,13 @@ def kaz_env(config):
     env = ss.black_death_v3(env)
     env.reset(seed=config["seed"])
 
+    setattr(env, "act_dict", act_dict)
+    setattr(env, "feature_names", feature_names)
+
     return env
 
 
 def env_creator(config={}):
-    random.seed = 42
     config["seed"] = random.randint(0, 1000000000)
     return kaz_env(config)
 
@@ -75,7 +147,7 @@ def run_train(
     max_timesteps=2_000_000,
     seed=0,
     tuning=False,
-    memory="none",
+    memory="no_memory",
 ):
     ray.init()
 
@@ -112,7 +184,7 @@ def run_train(
                 "attention_dim": 64,
                 "attention_num_transformer_units": 2,
                 "attention_num_heads": 2,
-                "attention_memory_training": 30,  # Short-term memory
+                "attention_memory_training": 30,
                 "attention_memory_inference": 30,
             }
         )
@@ -161,6 +233,11 @@ def run_train(
     # 6. Training Loop
     training_iters = max(max_timesteps // steps_per_iter, 1)
 
+    if tuning:
+        save_path = f".{env_name}/{memory}/{os.environ['RL_TUNING_PATH']}"
+    else:
+        save_path = f".{env_name}/{memory}/{os.environ['RL_TRAINING_PATH']}"
+
     max_reward_mean = -np.inf
     for i in range(training_iters):
         result = algo.train()
@@ -170,17 +247,15 @@ def run_train(
         if not tuning:
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
-                algo.save(
-                    checkpoint_dir=f".{env_name}/{memory}/{os.environ['RL_TRAINING_PATH']}"
-                )
+                algo.save(checkpoint_dir=save_path)
 
     if tuning:
-        algo.save(checkpoint_dir=f".{env_name}/{memory}/{os.environ['RL_TUNING_PATH']}")
+        algo.save(checkpoint_dir=save_path)
 
     algo.stop()
     ray.shutdown()
 
-    return algo
+    return algo, save_path
 
 
 def run_inference(algo, num_episodes: int = 100):
@@ -211,7 +286,7 @@ def run_inference(algo, num_episodes: int = 100):
     return total_reward / num_episodes
 
 
-def record_episode():
+def record_episode(memory="no_memory"):
     """
     Loads a trained policy from ./<env_name>/policy and plays a single episode
     in the corresponding PettingZoo environment, rendering each step.
@@ -228,7 +303,7 @@ def record_episode():
     ray.init(ignore_reinit_error=True)
 
     # 2) Load the trained policy from
-    checkpoint_path = "file://" + os.path.abspath(f".{env_name}/policies")
+    checkpoint_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
 
     algo = PPO.from_checkpoint(checkpoint_path)
 
@@ -245,10 +320,6 @@ def record_episode():
         # Step the environment
         observations, _, done, _, _ = env.step(actions)
 
-        # Render the environment's current state
-        frame = env.render()
-        frames.append(frame)
-
     # 5) Close the environment
     env.close()
 
@@ -262,6 +333,7 @@ def record_episode():
 
 if __name__ == "__main__":
     seed = 42
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():

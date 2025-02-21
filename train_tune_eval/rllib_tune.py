@@ -15,7 +15,7 @@ from rllib_train import env_creator, run_inference, run_train
 load_dotenv()
 
 
-def optim(tuner, trials, jobs, memory="none"):
+def optim(tuner, trials, jobs, memory="no_memory"):
     env = env_creator()
     study = optuna.create_study(
         study_name=f".{env.metadata['name']}/{memory}/{os.environ['RL_TUNING_PATH']}/tuning.db",
