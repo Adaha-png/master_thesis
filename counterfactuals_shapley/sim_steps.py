@@ -8,10 +8,14 @@ import sys
 import warnings
 
 import numpy as np
+import ray
 import supersuit as ss
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from stable_baselines3 import PPO
+from ray.rllib.algorithms.ppo import PPO
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.tune.registry import register_env
+from train_tune_eval.rllib_train import env_creator
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from .wrappers import par_env_with_seed
@@ -68,52 +72,38 @@ def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
     return rollout
 
 
-def sim_steps(env, model, chosen_actions=None, num_steps=20, seed=None):
-    env = par_env_with_seed(env, seed)
+def sim_steps(algo, num_steps, seed):
+    env = env_creator()
+    observations, _ = env.reset(seed)
 
-    if chosen_actions is None and type(model) == str:
-        model = PPO.load(model)
+    history = []
 
-    if seed:
-        env = par_env_with_seed(env, seed)
+    done = {agent: False for agent in env.agents}
+    i = 0
+    while not all(done.values()) and i < num_steps:
+        actions = {}
+        for agent, obs in observations.items():
+            _, _, info = algo.compute_single_action(obs, policy_id=agent.split("_")[0])
+            actions[agent] = np.argmax(info["logits"])
 
-    else:
-        print(
-            f"The method {inspect.stack()[0][3]}, called by {inspect.stack()[1][3]} requires a seed."
-        )
-        exit(0)
+        observations_next, rewards, done, _, _ = env.step(actions)
 
-    env = ss.black_death_v3(env)
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
-
-    obs = env.reset()
-    rollout = []
-    for step in range(num_steps):
-        step_dict = {
-            "observation": obs,
-        }
-
-        if chosen_actions is None:
-            act = model.predict(obs, deterministic=True)[0]
-        else:
-            act = chosen_actions[step]
-        obs, reward, termination, info = env.step(act)
-
-        step_dict.update(
-            {
-                "reward": reward,
-                "action": act,
+        step_record = {}
+        for agent in actions:
+            step_record[agent] = {
+                "observation": observations[agent],
+                "action": actions[agent],
+                "reward": rewards.get(agent),
             }
-        )
 
-        rollout.append(step_dict)
+        history.append(step_record)
 
-        if termination.all():
-            break
+        observations = observations_next
+        i += 1
 
     env.close()
-    return rollout
+
+    return history
 
 
 if __name__ == "__main__":

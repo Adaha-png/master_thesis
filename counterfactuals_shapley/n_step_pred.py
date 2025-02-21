@@ -8,6 +8,7 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
+import ray
 import shap
 import supersuit as ss
 import torch
@@ -15,10 +16,13 @@ from captum.attr import IntegratedGradients
 from dotenv import load_dotenv
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
+from ray.rllib.algorithms.ppo import PPO
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.tune.registry import register_env
 from sklearn.model_selection import train_test_split
-from stable_baselines3 import PPO
 from torch import nn
 from tqdm import tqdm
+from train_tune_eval.rllib_train import env_creator
 
 from .captum_grads import create_baseline
 from .shapley import kernel_explainer, shap_plot
@@ -28,7 +32,9 @@ from .wrappers import numpyfy, pathify
 load_dotenv()
 
 
-def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
+def add_shap(
+    X, expl, env, device, policy_path, agent, memory, extras="none", save=True
+):
     # Ensure compatibility with multiple input types
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
@@ -52,7 +58,7 @@ def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
             action_idx = obs[-1].item()
             shap_values = expl[int(action_idx)].shap_values(obs_np[:-1])
         else:
-            action_idx, _ = model.predict(numpyfy(obs))
+            action_idx, _ = model.compute_single_action(numpyfy(obs), policy_id=agent)
             shap_values = expl[action_idx].shap_values(obs_np)
 
         return np.concatenate((obs_np, shap_values))
@@ -61,19 +67,23 @@ def add_shap(X, expl, env, device, policy_path=None, extras="none", save=True):
         print("policy path required for extras = none")
         exit(0)
 
-    model = PPO.load(policy_path) if (extras == "none") and policy_path else None
+    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+    ray.init(ignore_reinit_error=True)
 
-    new_X = [get_new_obs(obs, extras, model) for obs in tqdm(X, desc="Adding shapley")]
+    algo = PPO.from_checkpoint(policy_path)
+
+    new_X = [get_new_obs(obs, extras, algo) for obs in tqdm(X, desc="Adding shapley")]
 
     if save:
         with open(
-            f".pred_data/.prediction_data_shap_{extras}_{env_name}.pkl", "wb"
+            f"{env.metadata['name']}/{agent}/{memory}/pred_data/.prediction_data_shap_{extras}.pkl",
+            "wb",
         ) as f:
             pickle.dump(new_X, f)
     return new_X
 
 
-def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
+def add_ig(X, ig, env, device, policy_path, extras="none", save=True):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -82,7 +92,6 @@ def add_ig(X, ig, env, device, policy_path=None, extras="none", save=True):
     env_name = env.metadata["name"]
     env = ss.black_death_v3(env)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=1, base_class="stable_baselines3")
     num_acts = env.action_space.n
 
     if extras == "one-hot":
@@ -125,21 +134,28 @@ def pred(net, n, device, X):
     return net(X).cpu().detach().numpy()[:, n]
 
 
-def simulate_cycle(env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent):
-    env_fn = simple_spread_v3 if env_name == "spread" else knights_archers_zombies_v10
-    env = env_fn.parallel_env(**env_kwargs)
-    policy = PPO.load(policy_path)
+def simulate_cycle(policy_path, steps_per_cycle, seed, agent):
+    env = env_creator()
+    env_name = env.metadata["env"]
+    ray.init()
+    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+    algo = PPO.from_checkpoint(policy_path)
 
-    seq = sim_steps(env, policy, num_steps=steps_per_cycle, seed=seed)
+    seq = sim_steps(algo, steps_per_cycle, seed)
+
+    ray.shutdown()
     X = seq[0]["observation"][agent]
     Y = seq[-1]["observation"][agent][2:4]  # Position of agent after 10 steps
     return X, Y
 
 
-def add_action(X, model, save=True):
-    new_X = [numpyfy([*obs, model.predict(obs)[0]]) for obs in X]
+def add_action(X, algo, agent, memory, save=True):
+    new_X = [
+        numpyfy([*obs, algo.compute_single_action(obs, policy_id=agent)[0]])
+        for obs in X
+    ]
     if save:
-        with open(".pred_data/.prediction_data_action.pkl", "wb") as f:
+        with open(f".pred_data/{agent}/{memory}/prediction_data_action.pkl", "wb") as f:
             pickle.dump(new_X, f)
     return new_X
 
@@ -189,10 +205,8 @@ def future_sight(
 
 
 def get_future_data(
-    env_name,
-    env_kwargs,
     policy_path,
-    agent=0,
+    agent,
     amount_cycles=10000,
     steps_per_cycle=10,
     seed=0,
@@ -203,9 +217,7 @@ def get_future_data(
     multiprocessing.set_start_method("spawn", force=True)
     pool = multiprocessing.Pool()
 
-    sim_func = partial(
-        simulate_cycle, env_name, env_kwargs, policy_path, steps_per_cycle, agent=agent
-    )
+    sim_func = partial(simulate_cycle, policy_path, steps_per_cycle, agent=agent)
 
     results = pool.starmap(sim_func, [(seed + c,) for c in range(amount_cycles)])
 
