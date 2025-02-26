@@ -10,7 +10,9 @@ import torch
 from captum.attr import IntegratedGradients
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from stable_baselines3 import PPO
+from ray.rllib.algorithms.ppo import PPO
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.tune.registry import register_env
 from torch import nn
 
 from .counterfactuals import action_difference_with_model, counterfactuals_with_model
@@ -20,8 +22,12 @@ from .wrappers import numpyfy
 
 
 def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device):
-    model = PPO.load(policy)
+    algo = PPO.from_checkpoint(policy)
 
+    algo.get_policy(policy_id=agent).export_model(
+        export_dir=f".{env.metadata['name']}/{agent}/{memory}"
+    )
+    policy_net = torch.load(glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")[0])
     net = nn.Sequential(
         *model.policy.mlp_extractor.policy_net,
         model.policy.action_net,
@@ -82,11 +88,9 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
 
 
-def create_baseline(env, policy, agent, device, steps_per_cycle=10, seed=1234567):
+def create_baseline(algo, agent, device, steps_per_cycle=10, seed=1234567):
     obs, _ = get_data(
-        env,
-        policy,
-        total_steps=1000,
+        algo,
         steps_per_cycle=steps_per_cycle,
         agent=agent,
         seed=seed,

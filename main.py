@@ -1,4 +1,3 @@
-import glob
 import os
 import random
 from functools import partial
@@ -18,17 +17,24 @@ load_dotenv()
 
 def train_new_policy(should_tune, timesteps, memory="no_memory"):
     if should_tune:
+        if os.path.exists(f".{env.metadata['name']}/{memory}/tuning.db"):
+            remove = input(
+                "Tuning db for this environment already exists, do you want to delete it and start over? [y/N]:"
+            )
+            if remove == "y":
+                os.remove(f".{env.metadata['name']}/{memory}/tuning.db")
+
         tuner = partial(tune.tuner, max_timesteps=int(os.environ["TUNING_STEPS"]))
         study = tune.optim(tuner, os.environ["TRIALS"], os.environ["JOBS"])
     else:
         study = optuna.load_study(
             study_name=f".{env.metadata['name']}/{memory}/tuning.db",
-            storage=f"sqlite:///.{env.metadata['name']}/{memory}/{os.environ['RL_TUNING_PATH']}/tuning.db",
+            storage=f"sqlite:///.{env.metadata['name']}/{memory}/tuning.db",
         )
 
     trial = study.best_trial
     gamma = trial.suggest_float("gamma", 0.8, 0.999)
-    lr = trial.suggest_float("lr", 1e-6, 1, log=True)
+    lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
 
     print(f"Using learning rate: {lr:.3e}, discount factor: {gamma:.3f}")
 
@@ -53,14 +59,10 @@ def get_policy(
             f".{str(env.metadata['name'])}/{memory}/{os.environ['RL_TRAINING_PATH']}"
         )
     elif not new_policy:
-        try:
-            policy_path = max(
-                glob.glob(f".{str(env.metadata['name'])}/*.zip"),
-                key=os.path.getctime,
-            )
-            print(policy_path)
-        except ValueError:
-            print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
+        if os.path.exists(
+            f".{str(env.metadata['name'])}/{memory}/{os.environ['RL_TRAINING_PATH']}"
+        ):
+            policy_path = f".{str(env.metadata['name'])}/{memory}/{os.environ['RL_TRAINING_PATH']}"
 
     if not policy_path:
         policy_path = train_new_policy(should_tune, timesteps)
@@ -81,9 +83,8 @@ if __name__ == "__main__":
 
     memory = "no_memory"
     policy_path = get_policy(
-        should_tune=False, new_policy=True, timesteps=2000000, memory=memory
+        should_tune=False, new_policy=False, timesteps=2000000, memory=memory
     )
 
     agent = env.possible_agents[0].split("_")[0]
-
     compare.run_compare(policy_path, agent, memory, env.feature_names, env.act_dict)

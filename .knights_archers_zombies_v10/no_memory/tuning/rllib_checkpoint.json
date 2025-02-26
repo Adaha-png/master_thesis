@@ -1,0 +1,1 @@
+{"type": "Algorithm", "checkpoint_version": "1.1", "format": "cloudpickle", "state_file": ".knights_archers_zombies_v10/no_memory/tuning/algorithm_state.pkl", "policy_ids": ["knight", "archer"], "ray_version": "2.40.0", "ray_commit": "22541c38dbef25286cd6d19f1c151bf4fd62f2ed"}

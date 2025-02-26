@@ -1,4 +1,5 @@
 import glob
+import lzma
 import os
 import pickle
 from functools import partial
@@ -37,6 +38,60 @@ def distance(predicted, y):
     return np.linalg.norm(predicted - y, axis=1)
 
 
+def extract_observations(history, agent_name, n, m):
+    obs_n = []
+    obs_n_plus_m = []
+
+    # Extract observation at step n
+    if 0 <= n < len(history):
+        step_record = history[n]
+        for agent, data in step_record.items():
+            if agent.startswith(agent_name):
+                obs_n.append(data.get("observation"))
+    else:
+        return
+
+    step_index = n + m
+    if 0 <= step_index < len(history):
+        step_record = history[step_index]
+        for agent, data in step_record.items():
+            if agent.startswith(agent_name):
+                obs_n_plus_m.append(data.get("observation")[1:3])
+    else:
+        return
+
+    return obs_n, obs_n_plus_m
+
+
+def extract_pairs_from_histories(histories, agent_name, m, n=None):
+    obs_pairs = [
+        extract_observations(
+            history, agent_name, n or np.random.randint(0, max(1, len(history) - m)), m
+        )
+        for history in tqdm(histories, desc="extracting obs and pos")
+    ]
+
+    initial_observations, later_observations = (
+        zip(*obs_pairs) if obs_pairs else ([], [])
+    )
+
+    return np.array(initial_observations), np.array(later_observations)
+
+
+def get_torch_from_algo(algo, agent, memory):
+    env = env_creator()
+    torch_path = f".{env.metadata['name']}/{memory}/{agent}/torch.pt"
+    if os.path.exists(torch_path):
+        policy_net = torch.load(torch_path)
+    else:
+        algo.get_policy(policy_id=agent).export_model(export_dir=torch_path)
+        policy_net = torch.load(torch_path)
+
+    net_with_softmax = nn.Sequential(*policy_net, nn.Softmax())
+
+    return net_with_softmax
+
+
 def compute(
     policy_path,
     agent,
@@ -71,34 +126,34 @@ def compute(
 
     algo = PPO.from_checkpoint(policy_path)
 
-    if not os.path.exists(
-        f".{env_name}/{agent}/{memory}/pred_data/prediction_data.pkl"
-    ):
-        X, y = get_future_data(policy_path, agent, steps_per_cycle=10, seed=921)
+    paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
+    if len(paths) < 10:
+        print(paths)
+        paths = get_future_data(policy_path, memory, seed=921, finished=len(paths))
 
-        with open(
-            f".{env_name}/{agent}/{memory}/pred_data/prediction_data.pkl", "wb"
-        ) as f:
-            pickle.dump((X, y), f)
-    else:
-        with open(
-            f".{env_name}/{agent}/{memory}/pred_data/prediction_data.pkl", "rb"
-        ) as f:
-            X, y = pickle.load(f)
+    X = []
+    y = []
+    for path in paths:
+        with lzma.open(path, "rb") as f:
+            seq = f.read()
+
+        partX, party = extract_pairs_from_histories(seq, agent, 10)
+        X.extend(partX)
+        y.extend(party)
 
     if extras != "none":
         if not os.path.exists(
-            f".{env_name}/{agent}/{memory}/pred_data/prediction_data_action.pkl"
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl"
         ):
             add_action(X, algo, agent, memory)
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_data_action.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
         else:
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_data_action.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -107,30 +162,20 @@ def compute(
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_ig_{extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.pkl"
         ):
-            globbed = glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")
-            if not globbed == []:
-                policy_net = torch.load(globbed[0])
-            else:
-                algo.get_policy(policy_id=agent).export_model(
-                    export_dir=f".{env.metadata['name']}/{agent}/{memory}"
-                )
-                policy_net = torch.load(
-                    glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")[0]
-                )
-
+            policy_net = get_torch_from_algo(algo, agent, memory)
             ig = IntegratedGradients(policy_net)
-            if not os.path.exists(f".{env_name}/{agent}/{memory}/.baseline_future.pt"):
+            if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
                 baseline = create_baseline(
-                    env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                    algo, agent, device, steps_per_cycle=100, seed=seed
                 )
                 torch.save(
-                    baseline, f".{env_name}/{agent}/{memory}/.baseline_future.pt"
+                    baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 )
             else:
                 baseline = torch.load(
-                    f".{env_name}/{agent}/{memory}/.baseline_future.pt",
+                    f".{env_name}/{memory}/{agent}/.baseline_future.pt",
                     map_location=device,
                     weights_only=True,
                 )
@@ -142,21 +187,27 @@ def compute(
                 return_convergence_delta=False,
             )
             X = add_ig(
-                X, ig_partial, env, device, policy_path=policy_path, extras=extras
+                algo,
+                agent,
+                memory,
+                X,
+                ig_partial,
+                device,
+                extras=extras,
             )
         else:
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_data_ig_{extras}.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f"{env_name}/{agent}/{memory}/pred_data/prediction_data_shap_{extras}.pkl"
+            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl"
         ):
             paths = glob.glob(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_data_shap_*.pkl"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_*.pkl"
             )
             if len(paths) > 0:
                 path = paths[0]
@@ -164,40 +215,36 @@ def compute(
                     Obs_with_shap = pickle.load(f)
                     Obs_with_shap = numpyfy(Obs_with_shap)
 
-                X = [
-                    np.array([*X[i], *Obs_with_shap[i, -18:]])
-                    for i in tqdm(range(len(X)))
-                ]
+                X = [np.array([*X[i], *Obs_with_shap[i, -18:]]) for i in range(len(X))]
 
                 with open(
-                    f".{env_name}/{agent}/{memory}/pred_data/prediction_data_shap_{extras}.pkl",
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl",
                     "wb",
                 ) as f:
                     pickle.dump(X, f)
             else:
-                tempenv = ss.black_death_v3(env)
-                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
-                num_acts = tempenv.action_space.n
+                num_acts = env.action_space.n
 
                 expl = [
                     kernel_explainer(
-                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
+                        algo, agent, i, memory, device, seed=372894 * (i + 1)
                     )
                     for i in range(num_acts)
                 ]
 
                 X = add_shap(
+                    algo,
+                    agent,
+                    memory,
                     X,
                     expl,
-                    env,
                     device,
-                    policy_path=policy_path,
                     extras=extras,
                 )
 
         else:
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_data_shap_{extras}.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -211,10 +258,11 @@ def compute(
     ).to(device)
 
     if not os.path.exists(
-        f".{env_name}/{agent}/{memory}/pred_models/pred_model_{extras}_{explainer_extras}.pt"
+        f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt"
     ):
         net = future_sight(
-            args.env,
+            agent,
+            memory,
             device,
             net,
             X,
@@ -225,11 +273,11 @@ def compute(
         net.eval()
     else:
         print(
-            f".{env_name}/{agent}/{memory}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+            f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
         )
         net.load_state_dict(
             torch.load(
-                f".{env_name}/{agent}/{memory}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+                f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
@@ -240,33 +288,40 @@ def compute(
         criterion = nn.MSELoss()
 
         if os.path.exists(
-            f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl"
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl"
         ):
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
         else:
             print("Test data not found, creating...")
             if not os.path.exists(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data.pkl"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl"
             ):
-                X_test, y_test = get_future_data(
+                path = get_future_data(
                     policy_path,
-                    agent,
+                    memory,
                     amount_cycles=10000,
-                    steps_per_cycle=10,
+                    steps_per_cycle=100,
+                    test=True,
                     seed=483927,
                 )
+
+                with lzma.open(path, "rb") as f:
+                    seq = f.read()
+
+                X_test, y_test = extract_pairs_from_histories(seq, agent, 10)
+
                 with open(
-                    f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data.pkl",
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl",
                     "wb",
                 ) as f:
                     pickle.dump((X_test, y_test), f)
             else:
                 with open(
-                    f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data.pkl",
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl",
                     "rb",
                 ) as f:
                     X_test, y_test = pickle.load(f)
@@ -277,30 +332,20 @@ def compute(
                     X_test = one_hot_action(X_test)
 
             if explainer_extras == "ig":
-                globbed = glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")
-                if not globbed == []:
-                    policy_net = torch.load(globbed[0])
-                else:
-                    algo.get_policy(policy_id=agent).export_model(
-                        export_dir=f".{env.metadata['name']}/{agent}/{memory}"
-                    )
-                    policy_net = torch.load(
-                        glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")[0]
-                    )
-
+                policy_net = get_torch_from_algo(algo, agent, memory)
                 ig = IntegratedGradients(policy_net)
                 if not os.path.exists(
-                    f".{env_name}/{agent}/{memory}/.baseline_future.pt"
+                    f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 ):
                     baseline = create_baseline(
-                        env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                        algo, agent, device, steps_per_cycle=100, seed=seed
                     )
                     torch.save(
-                        baseline, f".{env_name}/{agent}/{memory}/.baseline_future.pt"
+                        baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                     )
                 else:
                     baseline = torch.load(
-                        f".{env_name}/{agent}/{memory}/.baseline_future.pt",
+                        f".{env_name}/{memory}/{agent}/.baseline_future.pt",
                         map_location=device,
                         weights_only=True,
                     )
@@ -312,18 +357,19 @@ def compute(
                 )
 
                 X_test = add_ig(
+                    algo,
+                    agent,
+                    memory,
                     X_test,
                     ig_partial,
-                    env,
                     device,
-                    policy_path=policy_path,
                     extras=extras,
                     save=False,
                 )
 
             elif explainer_extras == "shap":
                 paths = glob.glob(
-                    f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data_*_shap.pkl"
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_*_shap.pkl"
                 )
                 if len(paths) > 0:
                     path = paths[0]
@@ -347,16 +393,17 @@ def compute(
                     ]
 
                     X_test = add_shap(
+                        algo,
+                        agent,
+                        memory,
                         X_test,
                         expl,
-                        env,
                         device,
-                        policy_path=policy_path,
                         extras=extras,
                     )
 
             with open(
-                f".{env_name}/{agent}/{memory}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)

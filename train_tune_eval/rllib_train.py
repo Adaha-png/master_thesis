@@ -109,10 +109,10 @@ def kaz_env(config):
         feature_names.extend(
             [
                 f"dist ent {i}",
-                "rel pos x ent {i}",
-                "rel pos y ent {i}",
-                "vel x ent {i}",
-                "vel y ent {i}",
+                f"rel pos x ent {i}",
+                f"rel pos y ent {i}",
+                f"vel x ent {i}",
+                f"vel y ent {i}",
             ]
         )
     act_dict = {
@@ -274,9 +274,10 @@ def run_inference(algo, num_episodes: int = 100):
 
             # For each agent, get the current observation and compute an action
             for agent_id, agent_obs in obs.items():
-                actions[agent_id] = algo.compute_single_action(
-                    agent_obs, policy_id=agent_id.split("_")[0]
+                action, _, info = algo.compute_single_action(
+                    agent_obs, policy_id=agent_id.split("_")[0], full_fetch=True
                 )
+                actions[agent_id] = np.argmax(info["action_dist_inputs"])
 
             # Step the environment with the multi-agent action dict
             obs, rewards, done, _, infos = env.step(actions)
@@ -314,8 +315,10 @@ def record_episode(memory="no_memory"):
         actions = {}
         # Gather actions for each agent from the loaded policy
         for agent, obs in observations.items():
-            action = algo.compute_single_action(obs, policy_id=agent.split("_")[0])
-            actions[agent] = action
+            action, _, info = algo.compute_single_action(
+                obs, policy_id=agent.split("_")[0], full_fetch=True
+            )
+            actions[agent] = np.argmax(info["action_dist_inputs"])
 
         # Step the environment
         observations, _, done, _, _ = env.step(actions)
@@ -339,19 +342,19 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    env = env_creator()
-    study = optuna.load_study(
-        study_name=f".{env.metadata['name']}/tuning.db",
-        storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
-    )
-
-    trial = study.best_trial
-    env.close()
-
+    # env = env_creator()
+    # study = optuna.load_study(
+    #     study_name=f".{env.metadata['name']}/tuning.db",
+    #     storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
+    # )
+    #
+    # trial = study.best_trial
+    # env.close()
+    #
     # gamma = trial.suggest_float("gamma", 0.8, 0.999)
     # lr = trial.suggest_float("lr", 1e-5, 1, log=True)
 
-    lr = 2e-5
-    gamma = 0.97
-    run_train(gamma=gamma, lr=lr, max_timesteps=2_000_000, seed=seed)
+    lr = 4.1592643658050244e-05
+    gamma = 0.9983387308814202
+    run_train(gamma=gamma, lr=lr, max_timesteps=10_000_000, seed=seed)
     record_episode()

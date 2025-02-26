@@ -15,6 +15,7 @@ from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
+
 from train_tune_eval.rllib_train import env_creator
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -83,13 +84,15 @@ def sim_steps(algo, num_steps, seed):
     while not all(done.values()) and i < num_steps:
         actions = {}
         for agent, obs in observations.items():
-            _, _, info = algo.compute_single_action(obs, policy_id=agent.split("_")[0])
-            actions[agent] = np.argmax(info["logits"])
+            _, _, info = algo.compute_single_action(
+                obs, policy_id=agent.split("_")[0], full_fetch=True
+            )
+            actions[agent] = np.argmax(info["action_dist_inputs"])
 
         observations_next, rewards, done, _, _ = env.step(actions)
 
         step_record = {}
-        for agent in actions:
+        for agent in actions.keys():
             step_record[agent] = {
                 "observation": observations[agent],
                 "action": actions[agent],

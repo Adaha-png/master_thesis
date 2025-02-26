@@ -11,21 +11,32 @@ import shap
 import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from stable_baselines3 import PPO
+from torch import nn
 from tqdm import tqdm
 
-from .sim_steps import sim_steps
-from .wrappers import numpyfy
+from counterfactuals_shapley.sim_steps import sim_steps
+from counterfactuals_shapley.wrappers import numpyfy
+from train_tune_eval.rllib_train import env_creator
 
 
-def pred(model, act, device, obs, softmax=True):
-    obs = torch.tensor(obs).unsqueeze(0).to(device)
-    action_net = model.policy.action_net.to(device)
-    policy_net = model.policy.mlp_extractor.policy_net.to(device)
-    if softmax:
-        vals = torch.softmax(action_net(policy_net(obs)), 2)
+def get_torch_from_algo(algo, agent, memory):
+    env = env_creator()
+    torch_path = f".{env.metadata['name']}/{agent}/{memory}/torch.pt"
+    if os.path.exists(torch_path):
+        policy_net = torch.load(torch_path)
     else:
-        vals = action_net(policy_net(obs))
+        algo.get_policy(policy_id=agent).export_model(export_dir=torch_path)
+        policy_net = torch.load(torch_path)
+
+    net_with_softmax = nn.Sequential(*policy_net, nn.Softmax())
+
+    return net_with_softmax
+
+
+def pred(net, act, device, obs):
+    obs = torch.tensor(obs).unsqueeze(0).to(device)
+    vals = net(obs)
+
     if act == None:
         vals = vals.unsqueeze(0).cpu().detach().numpy()
     else:
@@ -33,13 +44,11 @@ def pred(model, act, device, obs, softmax=True):
     return vals
 
 
-def kernel_explainer(env, policy, agent, action, device, seed=None):
-    X, _ = get_data(
-        env, policy, agent=agent, total_steps=10000, steps_per_cycle=25, seed=seed
-    )
-    model = PPO.load(policy)
+def kernel_explainer(algo, agent, action, memory, device, seed=None):
+    X, _ = get_data(algo, agent, total_steps=10000, steps_per_cycle=200, seed=seed)
+    net = get_torch_from_algo(algo, agent, memory)
     explainer = shap.KernelExplainer(
-        partial(pred, model, action, device), shap.kmeans(X, 200)
+        partial(pred, net, action, device), shap.kmeans(X, 200)
     )
     return explainer
 
@@ -53,9 +62,9 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     if isinstance(shap_values, list):
         shap_values = np.stack(shap_values, axis=-1)
 
-    assert shap_values.shape[1] == len(feature_names), (
-        "Mismatch between SHAP values and feature names dimensions."
-    )
+    assert shap_values.shape[1] == len(
+        feature_names
+    ), "Mismatch between SHAP values and feature names dimensions."
 
     # Compute mean absolute SHAP values across all instances
     mean_shap_values = np.mean(np.abs(shap_values), axis=0)
@@ -105,17 +114,15 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     plt.close()
 
 
-def get_data(env, policy, total_steps=10000, steps_per_cycle=250, agent=1, seed=None):
+def get_data(algo, agent, total_steps=10000, steps_per_cycle=250, seed=None):
     observations = []
     actions = []
     num_cycles = total_steps // steps_per_cycle
     for i in tqdm(range(num_cycles), desc="Simulating cycles"):
         if seed:
-            step_results = sim_steps(
-                env, policy, num_steps=steps_per_cycle, seed=seed + i + 200
-            )
+            step_results = sim_steps(algo, steps_per_cycle, seed=seed + i + 200)
         else:
-            step_results = sim_steps(env, policy, num_steps=steps_per_cycle)
+            step_results = sim_steps(algo, steps_per_cycle, 378429)
 
         for entry in step_results:
             obs = entry.get("observation")
