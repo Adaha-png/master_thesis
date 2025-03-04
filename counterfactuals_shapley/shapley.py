@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from counterfactuals_shapley.sim_steps import sim_steps
 from counterfactuals_shapley.wrappers import numpyfy
+from train_tune_eval.rllib_train import env_creator
 
 
 def pred(net, act, device, obs):
@@ -90,6 +91,7 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     cbar.set_label("Feature value")
 
     # Save the plot
+    env = env_creator()
     os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
 
     plt.savefig(
@@ -118,111 +120,3 @@ def get_data(net, agent, total_steps=10000, steps_per_cycle=100, seed=None):
                     actions.append(act[agent])
                     observations.append(obs[agent])
         return numpyfy(observations), numpyfy(actions)
-
-
-if __name__ == "__main__":
-    seed = 42
-    # Superseeding, might be unnecessary
-    np.random.seed(seed)
-    random.seed(seed)
-
-    parser = argparse.ArgumentParser(description="Simulation")
-    parser.add_argument(
-        "-e",
-        "--env",
-        type=str,
-        help="Which environment to use",
-        default="spread",
-    )
-    parser.add_argument(
-        "-s",
-        "--steps",
-        type=int,
-        help="Steps to simulate",
-        default=10,
-    )
-    parser.add_argument(
-        "-r",
-        "--render",
-        type=str,
-        help="Render mode, default None",
-        default=None,
-    )
-
-    args = parser.parse_args()
-    if args.env == "spread":
-        env_fn = simple_spread_v3
-
-        env_kwargs = dict(
-            N=3,
-            local_ratio=0.5,
-            max_cycles=25,
-            continuous_actions=False,
-        )
-
-        feature_names = [
-            "vel x",
-            "vel y",
-            "pos x",
-            "pos y",
-            "landmark 1 x",
-            "landmark 1 y",
-            "landmark 2 x",
-            "landmark 2 y",
-            "landmark 3 x",
-            "landmark 3 y",
-            "agent 2 x",
-            "agent 2 y",
-            "agent 3 x",
-            "agent 3 y",
-            "comms",
-            "comms",
-            "comms",
-            "comms",
-        ]
-        act_dict = {
-            0: "no action",
-            1: "move left",
-            2: "move right",
-            3: "move down",
-            4: "move up",
-        }
-    elif args.env == "kaz":
-        env_fn = knights_archers_zombies_v10
-
-        env_kwargs = dict(
-            spawn_rate=6,
-            num_archers=2,
-            num_knights=2,
-            max_zombies=10,
-            max_arrows=10,
-            max_cycles=900,
-            vector_state=True,
-        )
-        feature_names = None
-        act_dict = None
-    else:
-        print("Invalid env entered")
-        exit(0)
-
-    env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
-    try:
-        latest_policy = max(
-            glob.glob(str(env.metadata["name"]) + "/*.zip"),
-            key=os.path.getctime,
-        )
-        print(latest_policy)
-    except ValueError:
-        print("Policy not found.")
-        exit(0)
-
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(
-        kernel_explainer(
-            env,
-            latest_policy,
-            0,
-            0,
-            seed=seed,
-        )
-    )
