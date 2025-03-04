@@ -1,17 +1,23 @@
-import argparse
 import glob
-import multiprocessing
+import lzma
 import os
 import pickle
-import random
 from functools import partial
 
 import numpy as np
-import supersuit as ss
+import ray
 import torch
 from captum.attr import IntegratedGradients
-from captum_grads import create_baseline
-from n_step_pred import (
+from ray.rllib.algorithms.ppo import PPO
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.tune.registry import register_env
+from sklearn.metrics import precision_recall_fscore_support
+from torch import nn
+from tqdm import tqdm
+
+from counterfactuals_shapley.captum_grads import create_baseline
+from counterfactuals_shapley.compare import get_torch_from_algo, make_plots
+from counterfactuals_shapley.n_step_pred import (
     add_action,
     add_ig,
     add_shap,
@@ -19,20 +25,14 @@ from n_step_pred import (
     get_future_data,
     one_hot_action,
 )
-from pettingzoo.butterfly import knights_archers_zombies_v10
-from pettingzoo.mpe import simple_spread_v3
-from shapley import kernel_explainer, pred
-from sim_steps import sim_steps
-from sklearn.metrics import precision_recall_fscore_support
-from stable_baselines3 import PPO
-from torch import nn
-from tqdm import tqdm
-
-from wrappers import numpyfy
+from counterfactuals_shapley.shapley import kernel_explainer, pred
+from counterfactuals_shapley.sim_steps import sim_steps
+from counterfactuals_shapley.wrappers import numpyfy
+from train_tune_eval.rllib_train import env_creator
 
 
-def find_crit_state(policy, seq, device):
-    pred_func = partial(pred, policy, None, device, softmax=False)
+def find_crit_state(net, seq, device):
+    pred_func = partial(pred, net, None, device)
     max_diff = np.max(
         [
             np.max(pred_func(step["observation"]))
@@ -43,118 +43,132 @@ def find_crit_state(policy, seq, device):
     return max_diff
 
 
-def simulate_cycle(
-    env_name, env_kwargs, policy_path, steps_per_cycle, seed, agent, device
-):
-    env_fn = simple_spread_v3 if env_name == "spread" else knights_archers_zombies_v10
-    env = env_fn.parallel_env(**env_kwargs)
-    policy = PPO.load(policy_path)
+def get_crit_data(histories, net, device, m):
+    X = []  # List of initial observations
+    diff_vals = []  # List of difference values used to classify critical states
 
-    seq = sim_steps(env, policy, num_steps=steps_per_cycle, seed=seed)
-    X = seq[0]["observation"][agent]
-    max_diff = find_crit_state(policy, seq, device)
-    return X, max_diff
+    for history in histories:
+        if len(history) < m:  # Skip histories that are too short
+            continue
 
+        # Choose a random step `n` where we can look `m` steps ahead
+        n = np.random.randint(0, len(history) - m)
 
-def get_crit_data(
-    env_name,
-    env_kwargs,
-    policy_path,
-    agent=0,
-    amount_cycles=10000,
-    steps_per_cycle=10,
-    seed=0,
-):
-    X = []
-    diffs = []
+        # Extract initial observation (step n)
+        obs_n = history[n]["observation"]
+        X.append(obs_n)
 
-    # Iterate over the number of cycles instead of using multiprocessing
-    for c in tqdm(range(0, amount_cycles)):
-        # Call simulate_cycle directly
-        result = simulate_cycle(
-            env_name,
-            env_kwargs,
-            policy_path,
-            steps_per_cycle,
-            agent=agent,
-            device=device,
-            seed=seed + c,
-        )
+        # Extract future sequence (steps n to n+m)
+        future_seq = history[n : n + m]
 
-        x, diff = result
-        X.append(x)
-        diffs.append(diff)
+        # Compute difference value (criticality measure)
+        diff_value = find_crit_state(net, future_seq, device)
+        diff_vals.append(diff_value)
 
-    # Convert diffs to a numpy array for easy quantile computation
-    diffs = np.array(diffs)
+    # Convert to numpy arrays
+    X = np.array(X)
+    diff_vals = np.array(diff_vals)
 
-    threshold = np.quantile(diffs, 0.75)
+    # Determine threshold (75th percentile of diff values)
+    threshold = np.quantile(diff_vals, 0.75)
 
-    # Create Y array with 1s for the highest quantile and 0s otherwise
-    Y = (diffs > threshold).astype(int)
+    # Label each initial observation as critical (1) or non-critical (0)
+    Y = (diff_vals > threshold).astype(int)
+
     return X, Y
 
 
 def compute(
     policy_path,
+    agent,
     feature_names,
     act_dict,
     extras="none",
     explainer_extras="none",
+    memory="no_memory",
+    device=torch.device("cpu"),
 ):
     if extras == "one-hot":
         feature_names.extend(act_dict.values())
     elif extras == "action":
         feature_names.append(extras)
 
-    model = PPO.load(policy_path)
+    env = env_creator()
+    env.reset()
+    env_name = env.metadata["name"]
 
-    if not os.path.exists(".pred_data/.prediction_data_crit.pkl"):
-        X, y = get_crit_data(
-            args.env,
-            env_kwargs,
-            policy_path,
-            agent=0,
-            amount_cycles=100000,
-            steps_per_cycle=10,
-            seed=921,
-        )
-        with open(".pred_data/.prediction_data_crit.pkl", "wb") as f:
+    ray.init(ignore_reinit_error=True)
+
+    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+    policy_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
+
+    algo = PPO.from_checkpoint(policy_path)
+
+    net = get_torch_from_algo(algo, agent, memory)
+
+    if not os.path.exists(
+        f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl"
+    ):
+        paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
+        X = []
+        y = []
+        for path in paths:
+            with lzma.open(path, "rb") as f:
+                seq = f.read()
+
+            partX, party = get_crit_data(
+                seq,
+                net,
+                device,
+                10,
+            )
+            X.extend(partX)
+            y.extend(party)
+
+        with open(
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl", "wb"
+        ) as f:
             pickle.dump((X, y), f)
     else:
-        with open(".pred_data/.prediction_data_crit.pkl", "rb") as f:
+        with open(
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl", "rb"
+        ) as f:
             X, y = pickle.load(f)
 
     if extras != "none":
-        if not os.path.exists(".pred_data/.prediction_data_crit_action.pkl"):
-            add_action(X, model)
-            with open(".pred_data/.prediction_data_crit_action.pkl", "rb") as f:
+        if not os.path.exists(
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl"
+        ):
+            add_action(X, net, agent, memory)
+            with open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl",
+                "rb",
+            ) as f:
                 X = pickle.load(f)
         else:
-            with open(".pred_data/.prediction_data_crit_action.pkl", "rb") as f:
+            with open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl",
+                "rb",
+            ) as f:
                 X = pickle.load(f)
         if extras == "one-hot":
             X = one_hot_action(X)
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".pred_data/.prediction_data_crit_ig_{extras}_{env.metadata['name']}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.pkl"
         ):
-            policy_net = nn.Sequential(
-                *model.policy.mlp_extractor.policy_net,
-                model.policy.action_net,
-                nn.Softmax(),
-            ).to(device)
-
-            ig = IntegratedGradients(policy_net)
-            if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
+            ig = IntegratedGradients(net)
+            if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
                 baseline = create_baseline(
-                    env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                    net, agent, device, steps_per_cycle=100, seed=12341
                 )
-                torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
+                torch.save(
+                    baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                )
             else:
                 baseline = torch.load(
-                    f".baseline_future_{env.metadata['name']}.pt",
+                    f".{env_name}/{memory}/{agent}/.baseline_future.pt",
                     map_location=device,
                     weights_only=True,
                 )
@@ -165,142 +179,135 @@ def compute(
                 method="gausslegendre",
                 return_convergence_delta=False,
             )
-            X = add_ig(
-                X, ig_partial, env, device, policy_path=policy_path, extras=extras
-            )
+
+            X = add_ig(net, agent, memory, X, ig_partial, device, extras=extras)
         else:
             with open(
-                f".pred_data/.prediction_data_crit_ig_{extras}_{env.metadata['name']}.pkl",
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f".pred_data/.prediction_data_crit_shap_{extras}_{env.metadata['name']}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.pkl"
         ):
-            tempenv = ss.black_death_v3(env)
-            tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
-            tempenv = ss.concat_vec_envs_v1(
-                tempenv, 1, num_cpus=1, base_class="stable_baselines3"
-            )
-            num_acts = tempenv.action_space.n
+            num_acts = env.action_space.n
 
             expl = [
-                kernel_explainer(env, policy_path, 0, i, device, seed=372894 * (i + 1))
+                kernel_explainer(net, agent, i, device, seed=372894 * (i + 1))
                 for i in range(num_acts)
             ]
 
             X = add_shap(
-                X,
-                expl,
-                env,
-                device,
-                policy_path=policy_path,
-                extras=extras,
+                net, agent, memory, X, expl, device, extras=extras, path_ider="crit"
             )
 
         else:
             with open(
-                f".pred_data/.prediction_data_crit_shap_{extras}_{env.metadata['name']}.pkl",
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.pkl",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
-    try:
-        net = nn.Sequential(
-            nn.Linear(len(X[0]), 64),
-            nn.Tanh(),
-            nn.Linear(64, 64),
-            nn.Tanh(),
-            nn.Linear(64, len(y[0])),
-        ).to(device)
-    except TypeError:
-        net = nn.Sequential(
-            nn.Linear(len(X[0]), 64),
-            nn.Tanh(),
-            nn.Linear(64, 64),
-            nn.Tanh(),
-            nn.Linear(64, 1),
-            nn.Sigmoid(),
-        ).to(device)
+    pred_net = nn.Sequential(
+        nn.Linear(len(X[0]), 64),
+        nn.Tanh(),
+        nn.Linear(64, 64),
+        nn.Tanh(),
+        nn.Linear(64, 1),
+        nn.Sigmoid(),
+    ).to(device)
 
     if not os.path.exists(
-        f".pred_models/crit_model_{args.env}_{extras}_{explainer_extras}.pt"
+        f".{env_name}/{memory}/{agent}/crit_models/{extras}_{explainer_extras}.pt"
     ):
-        net = future_sight(
-            args.env,
+        pred_net = future_sight(
+            agent,
+            memory,
             device,
-            net,
+            pred_net,
             X,
             y,
             extras=extras,
             epochs=200,
             explainer_extras=explainer_extras,
             criterion=nn.BCELoss(),
-            name_identifier="crit",
         )
-        net.eval()
+        pred_net.eval()
     else:
-        net.load_state_dict(
+        pred_net.load_state_dict(
             torch.load(
-                f".pred_models/crit_model_{args.env}_{extras}_{explainer_extras}.pt",
+                f".{env_name}/{memory}/{agent}/crit_models/{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
         )
-        net.eval()
+        pred_net.eval()
 
     with torch.no_grad():
         criterion = nn.CrossEntropyLoss()
 
         if os.path.exists(
-            f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl"
         ):
             with open(
-                f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl",
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
         else:
             print("Test data not found, creating...")
-            if not os.path.exists(".pred_data/.prediction_test_data_crit.pkl"):
-                X_test, y_test = get_future_data(
-                    args.env,
-                    env_kwargs,
+            path = f".{env_name}/{memory}/prediction_test_data.xz"
+            if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
+                get_future_data(
                     policy_path,
-                    agent=0,
-                    amount_cycles=10000,
-                    steps_per_cycle=10,
+                    memory,
+                    amount_cycles=10,
+                    steps_per_cycle=100,
+                    test=True,
                     seed=483927,
                 )
-                with open(".pred_data/.prediction_test_data_crit.pkl", "wb") as f:
+
+            if not os.path.exists(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl"
+            ):
+                with lzma.open(path, "rb") as f:
+                    seq = pickle.load(f)
+
+                X_test, y_test = get_crit_data(seq, net, device, 10)
+
+                with open(
+                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.pkl",
+                    "wb",
+                ) as f:
                     pickle.dump((X_test, y_test), f)
             else:
-                with open(".pred_data/.prediction_test_data_crit.pkl", "rb") as f:
+                with open(
+                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.pkl",
+                    "rb",
+                ) as f:
                     X_test, y_test = pickle.load(f)
 
             if not extras == "none":
-                X_test = add_action(X_test, model, save=False)
+                X_test = add_action(X_test, net, agent, memory, save=False)
                 if extras == "one-hot":
                     X_test = one_hot_action(X_test)
 
             if explainer_extras == "ig":
-                policy_net = nn.Sequential(
-                    *model.policy.mlp_extractor.policy_net,
-                    model.policy.action_net,
-                    nn.Softmax(),
-                ).to(device)
-
-                ig = IntegratedGradients(policy_net)
-                if not os.path.exists(f".baseline_future_{env.metadata['name']}.pt"):
+                ig = IntegratedGradients(net)
+                if not os.path.exists(
+                    f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                ):
                     baseline = create_baseline(
-                        env, policy_path, 0, device, steps_per_cycle=1, seed=seed
+                        net, agent, device, steps_per_cycle=100, seed=342890
                     )
-                    torch.save(baseline, f".baseline_future_{env.metadata['name']}.pt")
+                    torch.save(
+                        baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                    )
                 else:
                     baseline = torch.load(
-                        f".baseline_future_{env.metadata['name']}.pt",
+                        f".{env_name}/{memory}/{agent}/.baseline_future.pt",
                         map_location=device,
                         weights_only=True,
                     )
@@ -312,48 +319,44 @@ def compute(
                 )
 
                 X_test = add_ig(
+                    net,
+                    agent,
+                    memory,
                     X_test,
                     ig_partial,
-                    env,
                     device,
-                    policy_path=policy_path,
                     extras=extras,
                     save=False,
                 )
 
             elif explainer_extras == "shap":
-                tempenv = ss.black_death_v3(env)
-                tempenv = ss.pettingzoo_env_to_vec_env_v1(tempenv)
-                tempenv = ss.concat_vec_envs_v1(
-                    tempenv, 1, num_cpus=1, base_class="stable_baselines3"
-                )
-                num_acts = tempenv.action_space.n
+                num_acts = env.action_space(agent + "_0").n
 
                 expl = [
-                    kernel_explainer(
-                        env, policy_path, 0, i, device, seed=372894 * (i + 1)
-                    )
+                    kernel_explainer(net, agent, i, device, seed=372894 * (i + 1))
                     for i in range(num_acts)
                 ]
 
                 X_test = add_shap(
-                    X_test,
+                    net,
+                    agent,
+                    memory,
+                    X,
                     expl,
-                    env,
                     device,
-                    policy_path=policy_path,
                     extras=extras,
+                    path_ider="crit",
                 )
 
             with open(
-                f".pred_data/.prediction_test_data_crit_{extras}_{explainer_extras}.pkl",
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)
 
         X_test = torch.Tensor(numpyfy(X_test)).to(device)
         y_test = torch.Tensor(numpyfy(y_test)).to(device)
-        test_outputs = net(X_test)
+        test_outputs = pred_net(X_test)
 
         test_loss = criterion(test_outputs, y_test).item()
         print(
@@ -367,100 +370,21 @@ def compute(
             y_test, test_outputs
         )
 
+    indices = torch.randperm(len(X_test))[:50]
+    make_plots(
+        expl,
+        X_test[indices],
+        agent,
+        memory,
+        extras,
+        explainer_extras,
+        None,
+    )
+
     return (test_loss, accuracy, precision, recall, f_score, support)
 
 
-if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    seed = 42
-    # Superseeding, might be unnecessary
-    np.random.seed(seed)
-    random.seed(seed)
-
-    parser = argparse.ArgumentParser(description="Simulation")
-    parser.add_argument(
-        "-e",
-        "--env",
-        type=str,
-        help="Which environment to use",
-        default="spread",
-    )
-    parser.add_argument(
-        "-r",
-        "--render",
-        type=str,
-        help="Render mode, default None",
-        default=None,
-    )
-
-    args = parser.parse_args()
-
-    if args.env == "spread":
-        env_fn = simple_spread_v3
-
-        env_kwargs = dict(
-            N=3,
-            local_ratio=0.5,
-            max_cycles=25,
-            continuous_actions=False,
-        )
-
-        feature_names = [
-            "vel x",
-            "vel y",
-            "pos x",
-            "pos y",
-            "landmark 1 x",
-            "landmark 1 y",
-            "landmark 2 x",
-            "landmark 2 y",
-            "landmark 3 x",
-            "landmark 3 y",
-            "agent 2 x",
-            "agent 2 y",
-            "agent 3 x",
-            "agent 3 y",
-            "comms 1",
-            "comms 2",
-            "comms 3",
-            "comms 4",
-        ]
-        act_dict = {
-            0: "no action",
-            1: "move left",
-            2: "move right",
-            3: "move down",
-            4: "move up",
-        }
-    elif args.env == "kaz":
-        env_fn = knights_archers_zombies_v10
-
-        env_kwargs = dict(
-            spawn_rate=6,
-            num_archers=2,
-            num_knights=2,
-            max_zombies=10,
-            max_arrows=10,
-            max_cycles=900,
-            vector_state=True,
-        )
-        feature_names = None
-        act_dict = None
-    else:
-        print("Invalid env entered")
-        exit(0)
-
-    env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
-    try:
-        policy_path = max(
-            glob.glob(f".{str(env.metadata['name'])}/*.zip"),
-            key=os.path.getctime,
-        )
-        print(policy_path)
-    except ValueError:
-        print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
-        exit(0)
-
+def crit_compare(policy_path, agent, memory, feature_names, act_dict):
     extras = ["none", "action", "one-hot"]
     explainer_extras = ["none", "ig", "shap"]
 
@@ -470,10 +394,12 @@ if __name__ == "__main__":
         for j, expl in enumerate(explainer_extras):
             outs = compute(
                 policy_path,
+                agent,
                 feature_names,
                 act_dict,
                 extras=extra,
                 explainer_extras=expl,
+                memory=memory,
             )
             for k, out in enumerate(outs):
                 table[i, j, k] = out

@@ -10,10 +10,8 @@ import torch
 from captum.attr import IntegratedGradients
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from ray.rllib.algorithms.ppo import PPO
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
-from ray.tune.registry import register_env
-from torch import nn
+
+from train_tune_eval.rllib_train import env_creator
 
 from .counterfactuals import action_difference_with_model, counterfactuals_with_model
 from .shapley import get_data
@@ -21,31 +19,16 @@ from .sim_steps import sim_steps
 from .wrappers import numpyfy
 
 
-def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device):
-    algo = PPO.from_checkpoint(policy)
-
-    algo.get_policy(policy_id=agent).export_model(
-        export_dir=f".{env.metadata['name']}/{agent}/{memory}"
-    )
-    policy_net = torch.load(glob.glob(f".{env.metadata['name']}/{agent}/{memory}/*")[0])
-    net = nn.Sequential(
-        *model.policy.mlp_extractor.policy_net,
-        model.policy.action_net,
-        nn.Softmax(),
-    ).to(device)
-
+def ig_extract(net, obs, action, agent, feature_names, act_dict, device):
     ig = IntegratedGradients(net)
-
+    env = env_creator()
     if not os.path.exists(".baseline.pt"):
-        baseline = create_baseline(env, policy, agent, device)
+        baseline = create_baseline(net, agent, device, steps_per_cycle=100)
         torch.save(baseline, ".baseline.pt")
     else:
         baseline = torch.load(
             f".baseline_future_{env.metadata['name']}.pt", map_location=device
         )
-
-    print(f"{baseline=}")
-    print(f"{obs=}")
 
     obs.to(device)
 
@@ -88,9 +71,9 @@ def ig_extract(env, policy, obs, action, agent, feature_names, act_dict, device)
     plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
 
 
-def create_baseline(algo, agent, device, steps_per_cycle=10, seed=1234567):
+def create_baseline(net, agent, device, steps_per_cycle=10, seed=1234567):
     obs, _ = get_data(
-        algo,
+        net,
         steps_per_cycle=steps_per_cycle,
         agent=agent,
         seed=seed,
@@ -186,7 +169,6 @@ if __name__ == "__main__":
             glob.glob(f".{str(env.metadata['name'])}/*.zip"),
             key=os.path.getctime,
         )
-        print(latest_policy)
     except ValueError:
         print("Policy not found in " + f".{str(env.metadata['name'])}/*.zip")
         exit(0)
@@ -207,7 +189,6 @@ if __name__ == "__main__":
         agent = np.argmax(individual[1:])
         action = seq[index]["action"][agent]
         relevant_obs = torch.from_numpy(relevant_obs[agent]).unsqueeze(0)
-        print(f"{action:= int(action)=}")
 
         # Assuming the action and relevant_obs variables are already defined
         data_to_save = {

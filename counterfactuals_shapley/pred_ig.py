@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from captum.attr import IntegratedGradients
+from captum_grads import create_baseline
+from n_step_pred import add_action, future_sight, get_future_data, one_hot_action
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from torch import nn
-
-from captum_grads import create_baseline
-from n_step_pred import add_action, future_sight, get_future_data, one_hot_action
 from wrappers import numpyfy
 
 

@@ -8,6 +8,7 @@ import torch
 from dotenv import load_dotenv
 
 import counterfactuals_shapley.compare as compare
+import counterfactuals_shapley.crit_state_pred as crit_state_pred
 import train_tune_eval.rllib_train as rllib_train
 import train_tune_eval.rllib_tune as tune
 from train_tune_eval.rllib_train import env_creator
@@ -18,6 +19,7 @@ load_dotenv()
 def train_new_policy(should_tune, timesteps, memory="no_memory"):
     if should_tune:
         if os.path.exists(f".{env.metadata['name']}/{memory}/tuning.db"):
+            remove = "y"
             remove = input(
                 "Tuning db for this environment already exists, do you want to delete it and start over? [y/N]:"
             )
@@ -78,13 +80,18 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    device = torch.device("cpu")
     env = env_creator()
-
     memory = "no_memory"
     policy_path = get_policy(
         should_tune=False, new_policy=False, timesteps=2000000, memory=memory
     )
 
     agent = env.possible_agents[0].split("_")[0]
-    compare.run_compare(policy_path, agent, memory, env.feature_names, env.act_dict)
+    compare.run_compare(
+        policy_path, agent, memory, env.feature_names, env.act_dict, device
+    )
+
+    crit_state_pred.crit_compare(
+        policy_path, agent, memory, env.feature_names, env.act_dict
+    )

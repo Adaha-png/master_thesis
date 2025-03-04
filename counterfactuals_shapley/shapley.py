@@ -11,26 +11,10 @@ import shap
 import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from torch import nn
 from tqdm import tqdm
 
 from counterfactuals_shapley.sim_steps import sim_steps
 from counterfactuals_shapley.wrappers import numpyfy
-from train_tune_eval.rllib_train import env_creator
-
-
-def get_torch_from_algo(algo, agent, memory):
-    env = env_creator()
-    torch_path = f".{env.metadata['name']}/{agent}/{memory}/torch.pt"
-    if os.path.exists(torch_path):
-        policy_net = torch.load(torch_path)
-    else:
-        algo.get_policy(policy_id=agent).export_model(export_dir=torch_path)
-        policy_net = torch.load(torch_path)
-
-    net_with_softmax = nn.Sequential(*policy_net, nn.Softmax())
-
-    return net_with_softmax
 
 
 def pred(net, act, device, obs):
@@ -44,16 +28,15 @@ def pred(net, act, device, obs):
     return vals
 
 
-def kernel_explainer(algo, agent, action, memory, device, seed=None):
-    X, _ = get_data(algo, agent, total_steps=10000, steps_per_cycle=200, seed=seed)
-    net = get_torch_from_algo(algo, agent, memory)
+def kernel_explainer(net, agent, target, device, seed=None):
+    X, _ = get_data(net, agent, total_steps=10000, steps_per_cycle=100, seed=seed)
     explainer = shap.KernelExplainer(
-        partial(pred, net, action, device), shap.kmeans(X, 200)
+        partial(pred, net, target, device), shap.kmeans(X, 100)
     )
     return explainer
 
 
-def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
+def shap_plot(agent, memory, X, explainer, feature_names, target):
     # Compute SHAP values for the given dataset X
 
     shap_values = explainer.shap_values(X)
@@ -101,36 +84,40 @@ def shap_plot(X, explainer, output_file, feature_names, coordinate_name):
     ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
 
     ax.set_ylabel("Feature")
-    ax.set_title(f"SHAP values for {coordinate_name} across all instances")
 
     # Add a color bar
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label("Feature value")
 
     # Save the plot
+    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
+
     plt.savefig(
-        f"tex/images/{output_file}_{coordinate_name}_shap.pdf".replace(" ", "_")
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pdf".replace(
+            " ", "_"
+        )
     )
     plt.close()
 
 
-def get_data(algo, agent, total_steps=10000, steps_per_cycle=250, seed=None):
+def get_data(net, agent, total_steps=10000, steps_per_cycle=100, seed=None):
     observations = []
     actions = []
     num_cycles = total_steps // steps_per_cycle
-    for i in tqdm(range(num_cycles), desc="Simulating cycles"):
-        if seed:
-            step_results = sim_steps(algo, steps_per_cycle, seed=seed + i + 200)
-        else:
-            step_results = sim_steps(algo, steps_per_cycle, 378429)
+    with torch.no_grad():
+        for i in tqdm(range(num_cycles), desc="Simulating cycles"):
+            if seed:
+                step_results = sim_steps(net, steps_per_cycle, seed=seed + i + 200)
+            else:
+                step_results = sim_steps(net, steps_per_cycle, 378429)
 
-        for entry in step_results:
-            obs = entry.get("observation")
-            act = entry.get("action")
-            if obs is not None and act is not None:
-                actions.append(act[agent])
-                observations.append(obs[agent])
-    return numpyfy(observations), numpyfy(actions)
+            for entry in step_results:
+                obs = entry.get("observation")
+                act = entry.get("action")
+                if obs is not None and act is not None:
+                    actions.append(act[agent])
+                    observations.append(obs[agent])
+        return numpyfy(observations), numpyfy(actions)
 
 
 if __name__ == "__main__":

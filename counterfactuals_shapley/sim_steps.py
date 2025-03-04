@@ -8,13 +8,10 @@ import sys
 import warnings
 
 import numpy as np
-import ray
 import supersuit as ss
+import torch
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
-from ray.rllib.algorithms.ppo import PPO
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
-from ray.tune.registry import register_env
 
 from train_tune_eval.rllib_train import env_creator
 
@@ -73,7 +70,7 @@ def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
     return rollout
 
 
-def sim_steps(algo, num_steps, seed):
+def sim_steps(net, num_steps, seed):
     env = env_creator()
     observations, _ = env.reset(seed)
 
@@ -84,11 +81,8 @@ def sim_steps(algo, num_steps, seed):
     while not all(done.values()) and i < num_steps:
         actions = {}
         for agent, obs in observations.items():
-            _, _, info = algo.compute_single_action(
-                obs, policy_id=agent.split("_")[0], full_fetch=True
-            )
-            actions[agent] = np.argmax(info["action_dist_inputs"])
-
+            vals = net.forward(torch.Tensor(obs))
+            actions[agent] = int(np.argmax(vals))
         observations_next, rewards, done, _, _ = env.step(actions)
 
         step_record = {}

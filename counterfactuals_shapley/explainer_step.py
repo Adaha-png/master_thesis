@@ -10,7 +10,6 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from shapley import kernel_explainer, shap_plot
 from sim_steps import sim_steps
-
 from wrappers import numpyfy
 
 if __name__ == "__main__":
