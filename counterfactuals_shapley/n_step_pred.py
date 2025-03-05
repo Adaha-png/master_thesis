@@ -112,8 +112,10 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
                     [
                         *obs.cpu(),
                         *ig(
-                            obs.to(torch.double),
-                            target=np.argmax(net.forward(obs.cpu())),
+                            obs,
+                            target=np.argmax(
+                                net(obs.to(device="cpu", dtype=torch.float32))
+                            ),
                         )[0].cpu(),
                     ]
                 )

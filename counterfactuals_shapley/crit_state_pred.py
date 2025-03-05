@@ -107,7 +107,7 @@ def compute(
     net = get_torch_from_algo(algo, agent, memory)
 
     if not os.path.exists(
-        f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl"
+        f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.xz"
     ):
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         X = []
@@ -125,29 +125,29 @@ def compute(
             X.extend(partX)
             y.extend(party)
 
-        with open(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl", "wb"
+        with lzma.open(
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.xz", "wb"
         ) as f:
             pickle.dump((X, y), f)
     else:
-        with open(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.pkl", "rb"
+        with lzma.open(
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
 
     if extras != "none":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.xz"
         ):
             add_action(X, net, agent, memory)
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
         else:
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -156,7 +156,7 @@ def compute(
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.xz"
         ):
             ig = IntegratedGradients(net)
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
@@ -182,15 +182,15 @@ def compute(
 
             X = add_ig(net, agent, memory, X, ig_partial, device, extras=extras)
         else:
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_ig_{extras}.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.xz"
         ):
             num_acts = env.action_space.n
 
@@ -204,8 +204,8 @@ def compute(
             )
 
         else:
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_shap_{extras}.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -249,10 +249,10 @@ def compute(
         criterion = nn.CrossEntropyLoss()
 
         if os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.xz"
         ):
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
@@ -270,21 +270,21 @@ def compute(
                 )
 
             if not os.path.exists(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz"
             ):
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
                 X_test, y_test = get_crit_data(seq, net, device, 10)
 
-                with open(
-                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.pkl",
+                with lzma.open(
+                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.xz",
                     "wb",
                 ) as f:
                     pickle.dump((X_test, y_test), f)
             else:
-                with open(
-                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.pkl",
+                with lzma.open(
+                    f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.xz",
                     "rb",
                 ) as f:
                     X_test, y_test = pickle.load(f)
@@ -348,8 +348,8 @@ def compute(
                     path_ider="crit",
                 )
 
-            with open(
-                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)

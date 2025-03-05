@@ -1,13 +1,10 @@
-import glob
 import multiprocessing
 import os
-import pickle
 import random
 import warnings
 
 import imageio
 import numpy as np
-import optuna
 import ray
 import ray.train.torch
 import supersuit as ss
@@ -17,7 +14,10 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
+
+from memories.gtrxl import CustomGTrXLModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -97,6 +97,8 @@ def kaz_env(config):
         + env_kwargs["max_zombies"]
     )
 
+    ents = "num_archers"
+
     feature_names = [
         "dist self",
         "pos x self",
@@ -104,7 +106,7 @@ def kaz_env(config):
         "vel x self",
         "vel y self",
     ]
-    for i in range(n - 1):
+    for i in range(n):
         # first entities are archers, then knights, then swords, then arrows then zombies.
         feature_names.extend(
             [
@@ -178,14 +180,16 @@ def run_train(
             }
         )
     elif memory == "attention":
+        ModelCatalog.register_custom_model("custom_gtrxl", CustomGTrXLModel)
+
         model_dict.update(
             {
+                "custom_model": "custom_gtrxl",
                 "use_attention": True,
-                "attention_dim": 64,
-                "attention_num_transformer_units": 2,
-                "attention_num_heads": 2,
-                "attention_memory_training": 30,
-                "attention_memory_inference": 30,
+                "custom_model_config": {
+                    "hidden_dim": 128,
+                    "num_heads": 4,
+                },
             }
         )
 

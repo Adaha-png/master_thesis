@@ -2,14 +2,11 @@ import glob
 import lzma
 import os
 import pickle
-import random
 from functools import partial
 
 import numpy as np
 import ray
-import supersuit as ss
 import torch
-import torch.nn.functional as F
 from captum.attr import IntegratedGradients
 from ray.rllib.algorithms.ppo import PPO
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
@@ -142,13 +139,11 @@ def compute(
 
     ray.shutdown()
 
-    if not os.path.exists(
-        f".{env_name}/{memory}/{agent}/pred_data/prediction_data.pkl"
-    ):
+    if not os.path.exists(f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz"):
         print("Prediction data not found, creating...")
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
-        # if len(paths) < 10:
-        #     paths = get_future_data(net, memory, seed=921, finished=paths)
+        if len(paths) < 10:
+            paths = get_future_data(net, memory, seed=921, finished=paths)
 
         X = []
         y = []
@@ -162,29 +157,29 @@ def compute(
 
         X = torch.Tensor(np.array(X))
         y = torch.Tensor(np.array(y))
-        with open(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.pkl", "wb"
+        with lzma.open(
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "wb"
         ) as f:
             pickle.dump((X, y), f)
     else:
-        with open(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.pkl", "rb"
+        with lzma.open(
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
 
     if extras != "none":
         if not os.path.exists(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl"
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz"
         ):
             add_action(X, net, agent, memory)
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
         else:
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -193,7 +188,7 @@ def compute(
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.pkl"
+            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz"
         ):
             ig = IntegratedGradients(net)
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
@@ -226,29 +221,29 @@ def compute(
                 extras=extras,
             )
         else:
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl"
+            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz"
         ):
             paths = glob.glob(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_*.pkl"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_*.xz"
             )
             if len(paths) > 0:
                 path = paths[0]
-                with open(path, "rb") as f:
+                with lzma.open(path, "rb") as f:
                     Obs_with_shap = pickle.load(f)
                     Obs_with_shap = numpyfy(Obs_with_shap)
 
                 X = [np.array([*X[i], *Obs_with_shap[i, -18:]]) for i in range(len(X))]
 
-                with open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl",
+                with lzma.open(
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz",
                     "wb",
                 ) as f:
                     pickle.dump(X, f)
@@ -271,8 +266,8 @@ def compute(
                 )
 
         else:
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -316,10 +311,10 @@ def compute(
         criterion = nn.MSELoss()
 
         if os.path.exists(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl"
+            f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz"
         ):
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
@@ -328,7 +323,7 @@ def compute(
             path = f".{env_name}/{memory}/prediction_test_data.xz"
             if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
                 get_future_data(
-                    policy_path,
+                    net,
                     memory,
                     amount_cycles=10000,
                     steps_per_cycle=100,
@@ -337,7 +332,7 @@ def compute(
                 )
 
             if not os.path.exists(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz"
             ):
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
@@ -348,15 +343,15 @@ def compute(
                     f".{env_name}/{memory}/{agent}/pred_data",
                     exist_ok=True,
                 )
-                with open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl",
+                with lzma.open(
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz",
                     "wb",
                 ) as f:
                     pickle.dump((X_test, y_test), f)
 
             else:
-                with open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.pkl",
+                with lzma.open(
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz",
                     "rb",
                 ) as f:
                     X_test, y_test = pickle.load(f)
@@ -404,11 +399,11 @@ def compute(
 
             elif explainer_extras == "shap":
                 paths = glob.glob(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_*_shap.pkl"
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_*_shap.xz"
                 )
                 if len(paths) > 0:
                     path = paths[0]
-                    with open(path, "rb") as f:
+                    with lzma.open(path, "rb") as f:
                         Obs_with_shap = pickle.load(f)[0]
                         Obs_with_shap = numpyfy(Obs_with_shap)
 
@@ -434,8 +429,8 @@ def compute(
                         extras=extras,
                     )
 
-            with open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.pkl",
+            with lzma.open(
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)
@@ -452,13 +447,9 @@ def compute(
         distances = distance(test_outputs.cpu(), y_test.cpu())
         avg_distance = np.mean(distances)
         max_distance = np.max(distances)
-
-    expl = [
-        kernel_explainer(pred_net, agent, i, device, seed=372894 * (i + 1))
-        for i in range(len(y[0]))
-    ]
-
-    indices = torch.randperm(len(X_test))[:50]
+    expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
+    print(y.shape)
+    indices = torch.randperm(len(X_test))[:10]
     for i in range(len(y[0])):
         make_plots(
             expl,

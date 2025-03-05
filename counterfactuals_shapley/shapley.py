@@ -1,16 +1,10 @@
-import argparse
-import glob
 import os
-import pprint
-import random
 from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
 import torch
-from pettingzoo.butterfly import knights_archers_zombies_v10
-from pettingzoo.mpe import simple_spread_v3
 from tqdm import tqdm
 
 from counterfactuals_shapley.sim_steps import sim_steps
@@ -19,7 +13,7 @@ from train_tune_eval.rllib_train import env_creator
 
 
 def pred(net, act, device, obs):
-    obs = torch.tensor(obs).unsqueeze(0).to(device)
+    obs = torch.tensor(obs).unsqueeze(0).to(device, dtype=torch.float32)
     vals = net(obs)
 
     if act == None:
@@ -29,8 +23,7 @@ def pred(net, act, device, obs):
     return vals
 
 
-def kernel_explainer(net, agent, target, device, seed=None):
-    X, _ = get_data(net, agent, total_steps=10000, steps_per_cycle=100, seed=seed)
+def kernel_explainer(net, X, target, device):
     explainer = shap.KernelExplainer(
         partial(pred, net, target, device), shap.kmeans(X, 100)
     )
@@ -45,6 +38,9 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     # Handling the case where SHAP values contains multiple outputs
     if isinstance(shap_values, list):
         shap_values = np.stack(shap_values, axis=-1)
+
+    print(f"{shap_values.shape=}")
+    print(f"{len(feature_names)=}")
 
     assert shap_values.shape[1] == len(
         feature_names
