@@ -90,14 +90,7 @@ def kaz_env(config):
         vector_state=True,
     )
 
-    n = (
-        env_kwargs["num_archers"]
-        + 2 * env_kwargs["num_knights"]
-        + env_kwargs["max_arrows"]
-        + env_kwargs["max_zombies"]
-    )
-
-    ents = "num_archers"
+    ents = ["num_archers", "num_knights", "num_swords", "max_arrows", "max_zombies"]
 
     feature_names = [
         "dist self",
@@ -106,17 +99,21 @@ def kaz_env(config):
         "vel x self",
         "vel y self",
     ]
-    for i in range(n):
-        # first entities are archers, then knights, then swords, then arrows then zombies.
-        feature_names.extend(
-            [
-                f"dist ent {i}",
-                f"rel pos x ent {i}",
-                f"rel pos y ent {i}",
-                f"vel x ent {i}",
-                f"vel y ent {i}",
-            ]
-        )
+    for ent_type in ents:
+        kwarg = ent_type
+        if ent_type == "num_swords":
+            kwarg = "num_knights"
+
+        for i in range(env_kwargs[kwarg]):
+            feature_names.extend(
+                [
+                    f"dist {ent_type.split('_')[-1][:-1]} {i}",
+                    f"rel pos x {ent_type.split('_')[-1][:-1]} {i}",
+                    f"rel pos y {ent_type.split('_')[-1][:-1]} {i}",
+                    f"vel x {ent_type.split('_')[-1][:-1]} {i}",
+                    f"vel y {ent_type.split('_')[-1][:-1]} {i}",
+                ]
+            )
     act_dict = {
         0: "idle",
         1: "rotate clockwise",
