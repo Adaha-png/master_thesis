@@ -31,6 +31,12 @@ def kernel_explainer(net, X, target, device):
 
 
 def shap_plot(agent, memory, X, explainer, feature_names, target):
+    env = env_creator()
+    if os.path.exists(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pdf"
+    ):
+        print("Plot already created, delete to make a new one, skipping..")
+        return
     # Compute SHAP values for the given dataset X
     shap_values = explainer.shap_values(X)
 
@@ -87,7 +93,6 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     cbar.set_label("Feature value")
 
     # Save the plot
-    env = env_creator()
     os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
 
     plt.savefig(
