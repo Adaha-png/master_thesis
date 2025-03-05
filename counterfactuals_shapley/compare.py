@@ -447,24 +447,22 @@ def compute(
         distances = distance(test_outputs.cpu(), y_test.cpu())
         avg_distance = np.mean(distances)
         max_distance = np.max(distances)
+
     expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
-    print(y.shape)
     indices = torch.randperm(len(X_test))[:10]
-    for i in range(len(y[0])):
-        make_plots(
-            expl,
-            X_test[indices],
-            agent,
-            memory,
-            extras,
-            explainer_extras,
-            i,
-        )
+    make_plots(
+        expl,
+        X_test[indices],
+        agent,
+        memory,
+        extras,
+        explainer_extras,
+    )
 
     return (test_loss, avg_distance, max_distance)
 
 
-def make_plots(explainer, X, agent, memory, extras, explainer_extras, target):
+def make_plots(explainer, X, agent, memory, extras, explainer_extras):
     if not isinstance(X, np.ndarray):
         X = numpyfy(X)
 
@@ -484,14 +482,14 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras, target):
             ]
         )
     if isinstance(explainer, list):
-        for expl in explainer:
+        for i, expl in enumerate(explainer):
             shap_plot(
                 agent,
                 memory,
                 X,
                 expl,
                 feature_names,
-                target,
+                i,
             )
     else:
         shap_plot(
@@ -500,7 +498,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras, target):
             X,
             explainer,
             feature_names,
-            target,
+            None,
         )
 
 
