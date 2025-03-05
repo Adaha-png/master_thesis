@@ -449,7 +449,7 @@ def compute(
         max_distance = np.max(distances)
 
     expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
-    indices = torch.randperm(len(X_test))[:10]
+    indices = torch.randperm(len(X_test))[:50]
     make_plots(
         expl,
         X_test[indices],
