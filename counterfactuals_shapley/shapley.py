@@ -32,11 +32,6 @@ def kernel_explainer(net, X, target, device):
 
 def shap_plot(agent, memory, X, explainer, feature_names, target):
     env = env_creator()
-    if os.path.exists(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pdf"
-    ):
-        print("Plot already created, delete to make a new one, skipping..")
-        return
     # Compute SHAP values for the given dataset X
     shap_values = explainer.shap_values(X)
 
@@ -67,6 +62,14 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     norm = plt.Normalize(np.min(feature_values), np.max(feature_values))
     colors = plt.cm.viridis(norm(feature_values))
 
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            # Use LaTeX default serif font.
+            "font.serif": [],
+            "pgf.texsystem": "pdflatex",
+        }
+    )
     # Create a new figure and axis
     _, ax = plt.subplots(figsize=(8, 12))
 
@@ -96,9 +99,10 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
 
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pdf".replace(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pgf".replace(
             " ", "_"
-        )
+        ),
+        backend="pgf",
     )
     plt.close()
 

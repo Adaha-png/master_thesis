@@ -53,6 +53,14 @@ def ig_extract(net, obs, action, agent, feature_names, act_dict, device):
     # Create a new figure and axis
     _, ax = plt.subplots(figsize=(8, 12))
 
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            # Use LaTeX default serif font.
+            "font.serif": [],
+            "pgf.texsystem": "pdflatex",
+        }
+    )
     # Stem plot
     ax.scatter(attributions, feature_names, s=6)
 
@@ -68,7 +76,9 @@ def ig_extract(net, obs, action, agent, feature_names, act_dict, device):
     ax.set_title("Integrated gradients method")
 
     # Show the plot
-    plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
+    plt.savefig(
+        f"tex/images/intgrad_{act_dict[action]}.pgf".replace(" ", "_"), backend="pgf"
+    )
 
 
 def create_baseline(X):

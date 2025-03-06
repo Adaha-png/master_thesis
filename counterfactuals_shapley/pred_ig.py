@@ -94,11 +94,20 @@ def ig_extract_future(
     ax.set_ylabel("Feature")
     ax.set_title("Integrated gradients method")
 
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            # Use LaTeX default serif font.
+            "font.serif": [],
+            "pgf.texsystem": "pdflatex",
+        }
+    )
     # Show the plot
     plt.savefig(
-        f"tex/images/intgrad_{coordinates[coordinate]}_{env.metadata['name']}.pdf".replace(
+        f"tex/images/intgrad_{coordinates[coordinate]}_{env.metadata['name']}.pgf".replace(
             " ", "_"
-        )
+        ),
+        backend="pgf",
     )
 
 

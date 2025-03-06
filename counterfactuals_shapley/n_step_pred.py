@@ -87,8 +87,6 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
     elif isinstance(X, list):
         X = torch.Tensor(X).to(device=device, dtype=torch.float32)
 
-    X = X[:100]
-
     env = env_creator()
     num_acts = env.action_space(agent + "_0").n
     env.close()
@@ -115,7 +113,7 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
                         *obs.cpu(),
                         *ig(
                             obs,
-                            target=torch.argmax(net(obs.to(device))),
+                            target=torch.argmax(net(obs)),
                         ).squeeze(),
                     ]
                 )
@@ -123,16 +121,15 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
             ]
     if save:
         os.makedirs(
-            f".{env.metadata['name']}/{agent}/{memory}/pred_data",
+            f".{env.metadata['name']}/{memory}/{agent}/pred_data",
             exist_ok=True,
         )
         with lzma.open(
-            f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_ig_{extras}.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
 
-    exit(0)
     return new_X
 
 
@@ -189,6 +186,7 @@ def future_sight(
     net = train_net(
         net,
         memory,
+        agent,
         X_train,
         y_train,
         X_test,
@@ -261,6 +259,7 @@ def get_future_data(
 def train_net(
     net,
     memory,
+    agent,
     X_train,
     y_train,
     X_test,
@@ -340,9 +339,9 @@ def train_net(
     plt.title("Loss on evaluation set during training")
     env = env_creator()
 
-    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}", exist_ok=True)
+    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/pred_model_{extras}_{explainer_extras}.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/pred_model_{extras}_{explainer_extras}.pgf"
     )
 
     # Evaluate on test data

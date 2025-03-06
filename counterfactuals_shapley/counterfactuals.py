@@ -81,7 +81,14 @@ def counterfactuals(env, sequence: List[Dict]):
             for i in individuals
         ]
     )
-
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            # Use LaTeX default serif font.
+            "font.serif": [],
+            "pgf.texsystem": "pdflatex",
+        }
+    )
     # Plotting the points
     plt.scatter(
         ind_plotting[:, 0],
@@ -94,7 +101,7 @@ def counterfactuals(env, sequence: List[Dict]):
     plt.gca().invert_xaxis()
     plt.legend()
     plt.title("Pareto Optimal Set")
-    plt.savefig("tex/images/best_counterfactuals.pdf")
+    plt.savefig("tex/images/best_counterfactuals.pgf", backend="pgf")
 
 
 def reward_difference_with_model(

@@ -204,7 +204,6 @@ def compute(
                 )
 
             baseline = baseline.to(torch.float32)
-            print(baseline)
             ig_partial = partial(
                 ig.attribute,
                 baselines=baseline,
@@ -366,9 +365,7 @@ def compute(
                 if not os.path.exists(
                     f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 ):
-                    baseline = create_baseline(
-                        net, agent, device, steps_per_cycle=100, seed=seed
-                    )
+                    baseline = create_baseline(X_test)
                     torch.save(
                         baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                     )
@@ -378,8 +375,6 @@ def compute(
                         map_location=device,
                         weights_only=True,
                     )
-                    print("hdfsjkhfjkshjkfdshjkshjkfs")
-                    print(f"{baseline.dtype=}")
                 ig_partial = partial(
                     ig.attribute,
                     baselines=baseline,
@@ -416,8 +411,7 @@ def compute(
                     num_acts = env.action_space(agent + "_0").n
 
                     expl = [
-                        kernel_explainer(net, agent, i, device, seed=372894 * (i + 1))
-                        for i in range(num_acts)
+                        kernel_explainer(net, X, i, device) for i in range(num_acts)
                     ]
 
                     X_test = add_shap(
@@ -449,16 +443,23 @@ def compute(
         avg_distance = np.mean(distances)
         max_distance = np.max(distances)
 
-    expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
-    indices = torch.randperm(len(X_test))[:50]
-    make_plots(
-        expl,
-        X_test[indices],
-        agent,
-        memory,
-        extras,
-        explainer_extras,
+    plot_paths = glob.glob(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/*_{extras}_{explainer_extras}_shap.pgf"
     )
+
+    if len(plot_paths) != len(y[0]):
+        expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
+        indices = torch.randperm(len(X_test))[:50]
+        make_plots(
+            expl,
+            X_test[indices],
+            agent,
+            memory,
+            extras,
+            explainer_extras,
+        )
+    else:
+        print("Plots already created, delete existing to make new ones, skipping..")
 
     return (test_loss, avg_distance, max_distance)
 
