@@ -66,14 +66,14 @@ def add_shap(
 
     new_X = [get_new_obs(obs, extras, net) for obs in tqdm(X, desc="Adding shapley")]
     if not test:
-        with open(
-            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/prediction_data_shap_{extras}.pkl",
+        with lzma.open(
+            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/prediction_data_shap_{extras}.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
     else:
-        with open(
-            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/test_data_shap_{extras}.pkl",
+        with lzma.open(
+            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/test_data_shap_{extras}.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -83,9 +83,11 @@ def add_shap(
 
 def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
     if isinstance(X, np.ndarray):
-        X = torch.from_numpy(X).to(device=device, dtype=torch.double)
+        X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
-        X = torch.Tensor(X).to(device=device, dtype=torch.double)
+        X = torch.Tensor(X).to(device=device, dtype=torch.float32)
+
+    X = X[:100]
 
     env = env_creator()
     num_acts = env.action_space(agent + "_0").n
@@ -112,22 +114,25 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
                     [
                         *obs.cpu(),
                         *ig(
-                            obs.to(device="cpu", dtype=torch.float64),
-                            target=np.argmax(
-                                net(obs.to(device="cpu", dtype=torch.float64))
-                            ),
-                        )[0].cpu(),
+                            obs,
+                            target=torch.argmax(net(obs.to(device))),
+                        ).squeeze(),
                     ]
                 )
                 for obs in tqdm(X, desc="Adding ig")
             ]
     if save:
-        with open(
-            f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_ig_{extras}.pkl",
+        os.makedirs(
+            f".{env.metadata['name']}/{agent}/{memory}/pred_data",
+            exist_ok=True,
+        )
+        with lzma.open(
+            f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_ig_{extras}.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
 
+    exit(0)
     return new_X
 
 
@@ -151,8 +156,8 @@ def add_action(X, net, agent, memory, save=True):
         ]
         if save:
             env = env_creator()
-            with open(
-                f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_action.pkl",
+            with lzma.open(
+                f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_action.xz",
                 "wb",
             ) as f:
                 pickle.dump(new_X, f)
@@ -333,9 +338,12 @@ def train_net(
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
+    env = env_creator()
 
-    os.makedirs(f"tex/images/{memory}", exist_ok=True)
-    plt.savefig(f"tex/images/{memory}/pred_model_{extras}_{explainer_extras}.pdf")
+    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}", exist_ok=True)
+    plt.savefig(
+        f"tex/images/{env.metadata['name']}/{memory}/pred_model_{extras}_{explainer_extras}.pgf"
+    )
 
     # Evaluate on test data
     net.eval()

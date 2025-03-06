@@ -71,16 +71,9 @@ def ig_extract(net, obs, action, agent, feature_names, act_dict, device):
     plt.savefig(f"tex/images/intgrad_{act_dict[action]}.pdf".replace(" ", "_"))
 
 
-def create_baseline(net, agent, device, steps_per_cycle=10, seed=1234567):
-    obs, _ = get_data(
-        net,
-        steps_per_cycle=steps_per_cycle,
-        agent=agent,
-        seed=seed,
-    )
-
-    baseline = torch.mean(torch.tensor(obs), dim=0).unsqueeze(0)
-    return baseline.to(device)
+def create_baseline(X):
+    baseline = torch.mean(torch.tensor(X), dim=0).unsqueeze(0)
+    return baseline.to(dtype=torch.float32)
 
 
 # if __name__ == "__main__":

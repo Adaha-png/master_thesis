@@ -192,9 +192,7 @@ def compute(
         ):
             ig = IntegratedGradients(net)
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
-                baseline = create_baseline(
-                    net, agent, device, steps_per_cycle=100, seed=seed
-                )
+                baseline = create_baseline(X)
                 torch.save(
                     baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 )
@@ -205,6 +203,8 @@ def compute(
                     weights_only=True,
                 )
 
+            baseline = baseline.to(torch.float32)
+            print(baseline)
             ig_partial = partial(
                 ig.attribute,
                 baselines=baseline,
@@ -378,6 +378,7 @@ def compute(
                         map_location=device,
                         weights_only=True,
                     )
+                    print("hdfsjkhfjkshjkfdshjkshjkfs")
                     print(f"{baseline.dtype=}")
                 ig_partial = partial(
                     ig.attribute,
