@@ -33,7 +33,7 @@
     \acro  {rl}   [RL]   {Reinforcement Learning}
     \acro  {xrl} [XRL] {Explainable Reinforcement Learning}
     \acro  {ai}   [AI]   {Artificial Intelligence}
-    \acro  {xai}  [XAI]  {Explainable Artificial Intelligence}    % will not be listed, as it is not used
+    \acro  {xai}  [XAI]  {Explainable Artificial Intelligence}
     \acro  {marl}  [MARL]  {Multi Agent Reinforcement Learning}
     \acro  {mdp}  [MDP]  {Markov Decision Process}
     \acro  {dqn}  [DQN]  {Deep Q-Network}
@@ -45,6 +45,7 @@
     \acro  {ea}  [EA]  {Evolutionary Algorithm}
     \acro  {nsga}  [NSGA-II]  {Non-Dominated Sorting Genetic Algorithm II}
     \acro  {nn}  [NN]  {Neural Network}
+    \acro  {aec}  [AEC]  {Agent Environment Cycle}
 \end{acronym}
 
 
@@ -53,25 +54,74 @@ This is the abstract
 
 \lefthyphenmin=1000
 \tableofcontents
-
 \chapter{Introduction}
 
+
+Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
+
 \section{Motivation}
-The motivation behind this research comes from the challenge of interpreting and trusting \ac{rl} systems, particularly in \ac{marl} environments. RL models have achieved significant success in many applications, they often suffer from the "black box" problem, where their decision-making processes remain opaque. This lack of transparency could prove a significant risk in safety-critical applications such as autonomous driving. Without understanding why an agent makes a decision, deploying \ac{drl}-based systems in real-world scenarios becomes problematic.
+A significant problem with many deep machine learning models, including \ac{marl} policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a \ac{marl} system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
+
+All this essentially means, until the black box problem is solved, autopilot will always require a driver behind the wheel\cite{tian2018deeptest}. Despite having high accuracy, precision and recall, a reinforcement learning model might choose a less than preferable action in edge cases or states not well covered by training and test sets, for example driving on snowy roads when all images in the training data is from warmer climates, or combinations that aren't well covered, like a foggy, snowy road with a sharp right turn.
+With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a \ac{marl} setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
+
 \section{Problem statement}
+The focus of this paper will be to rework and apply methods for general \ac{xai} to Reinforcement Learning, and expand on \ac{xrl} methods already developed. In particular we will focus on an agent and how the expected future states of other agents will affect it in its decision making process. The environment we will focus on is a \ac{marl} environment known as Knights Archers Zombies \cite{KAZ} made for Python. We use this because it is a cooperative environment where each agent has to consider other agents, both of the same type as itself, and other types. If we used an environment where all the agents are identical, our findings will be less useful for other environments where the agents aren't identical. In many real life scenarios agents will not be identical. If we once again consider autonomous vehicles, most vehicles are different in some way. A very obvious example of this is considering cars and motorcycles. Where because of their size difference, their paths chosen will often be different.
+
+In psychology it is well known that most human based decisions are made with intent\cite{inbook}, and by focusing on the expectation of what future states will look like we can consider this the intent of the agent. If we are accurately able to extract the intent of an \ac{rl} policy we are better able to explain the choice made and we are more comfortable with trusting that the choice made is a good decision. Concretely we hypothesise that by analyzing expected future states and events we could find the intent of the agent, which we could use to ensure the agent acts in a safe or desirable manner. The main question we aim to answer is what information, found in weights or design of the policy, or information extracted by knowing the weights and design, is the most important for separate prediction models to be able to predict future states and actions, in cases where we do not have access to a decent world model, or such a model does not exist.
+
+
 \section{Scope and limitations}
+We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. However, due to time limitations we restrict the framework to only accept PettingZoo example environments or environments created with the PettingZoo environment creation tool. \ac{marl} environments can be divided into two major categories, \ac{aec} and parallel. \ac{aec} environments are environments where the state transition happens after each agent chooses an action, and parallel environments are environments where all the agents choose an action each before the transition happens. See figure \ref{fig:aec}.
+
+Due to limited time and resources the size of policy or value networks, as well as any other \acp{nn} or otherwise computationally expensive algorithm used, will have to be significantly limited, this will impact results in a meaningful way, and therefore we will keep all \acp{nn} comparable sizes, and focus on doing experiments on how other factors than network size impact the results.
+
+\begin{figure}
+\begin{center}
+
+\begin{tikzpicture}[>=Latex, node distance=2.5cm, auto, font=\small]
+
+    % Agent 1 Node
+    \node[draw, thick, circle, fill=blue!20, minimum size=2.5cm, align=center] (agent1)
+    at (-3,3) {Agent 1 \\ \(\pi_{\theta_1}\)};
+
+    % Transition 1 Node
+    \node[draw, thick, circle, fill=green!20, minimum size=2.5cm, align=center] (trans1)
+    at (0,6) {State \\ Transition 1};
+
+    % Agent 2 Node
+    \node[draw, thick, circle, fill=blue!20, minimum size=2.5cm, align=center] (agent2)
+    at (3,3) {Agent 2 \\ \(\pi_{\theta_2}\)};
+
+    % Transition 2 Node
+    \node[draw, thick, circle, fill=green!20, minimum size=2.5cm, align=center] (trans2)
+    at (0,0) {State \\ Transition 2};
+
+    % Arrows between nodes
+    \draw[->, thick] (agent1.north) -- node[left] {\(a^1\)} (trans1.west);
+    \draw[->, thick] (trans1.east) -- node[right] {\(o^1\)} (agent2.north);
+    \draw[->, thick] (agent2.south) -- node[right] {\(a^2\)} (trans2.east);
+    \draw[->, thick] (trans2.west) -- node[left] {\(o^2\)} (agent1.south);
+
+\end{tikzpicture}
+
+\caption{Example \ac{aec} in an environment with 2 agents.}
+\label{fig:aec}
+\end{center}
+\end{figure}
+
 \section{Research methods}
 \section{Ethical considerations}
 \section{Main contributions}
 \section{Thesis outline}
 This thesis will be structured as follows:
 \begin{itemize}
+
     \item \textbf{Chapter 2: Background and related works}\\
         This chapter will introduce important concepts, both \ac{rl} and explainability related, and briefly discuss the history of \ac{xai} methods, and how they are applicable to my use case. We will also consider \ac{xrl} methods that are already developed and how to expand or integrate them into developed methods of our own.
 
     \item \textbf{Chapter 3: Methodology}\\
         This chapter discusses the specific principles, procedures and techniques used to conduct the \ac{xrl} research done in this thesis, to ensure that the results we get are valid and reliable.
-
     \item \textbf{Chapter 4: Experiments}\\
         This chapter details the setup, results and analysis of the specific experiments we use to evaluate the hypothesis and answer research questions based on certain evaluation metrics, and baseline comparisons.
 
@@ -84,7 +134,6 @@ This thesis will be structured as follows:
 
 \begin{figure}
 \begin{center}
-
     \hspace{-4cm}
     \begin{tikzpicture}[>=Latex, node distance=2.5cm, auto, font=\small]
     % Agent Node (with Policy and Value Networks)
@@ -118,25 +167,11 @@ This thesis will be structured as follows:
 
     % Arrow: PPO Update to Agent (New Parameters)
     \draw[->, thick] (ppo.west) .. controls +(-7,0) and +(0,0) .. node[right] {New parameters \(\theta, \phi\)} (agent.west);
-
 \end{tikzpicture}
-\caption{Diagram showing the PPO update algorithm}
+\caption{Diagram showing the \ac{ppo} update algorithm}
 \label{fig:rl_basics}
 \end{center}
 \end{figure}
-
-Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
-
-A significant problem with many deep machine learning models, including \ac{marl} policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a \ac{marl} system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
-
-All this essentially means, until the black box problem is solved, autopilot will always require a driver behind the wheel\cite{tian2018deeptest}. Despite having high accuracy, precision and recall, a reinforcement learning model might choose a less than preferable action in edge cases or states not well covered by training and test sets, for example driving on snowy roads when all images in the training data is from warmer climates, or combinations that aren't well covered, like a foggy, snowy road with a sharp right turn.
-With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a \ac{marl} setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
-
-The focus of this paper will be to rework and apply methods for general \ac{xai} to Reinforcement Learning, and expand on \ac{xrl} methods already developed. In particular we will focus on an agent and how the expected future states of other agents will affect it in its decision making process. The environment we will focus on is a \ac{marl} environment known as Knights Archers Zombies \cite{KAZ} made for Python. We use this because it is a cooperative environment where each agent has to consider other agents, both of the same type as itself, and other types. If we used an environment where all the agents are identical, our findings will be less useful for other environments where the agents aren't identical. In many real life scenarios agents will not be identical. If we once again consider autonomous vehicles, most vehicles are different in some way. A very obvious example of this is considering cars and motorcycles. Where because of their size difference, their paths chosen will often be different.
-
-In psychology it is well known that most human based decisions are made with intent\cite{inbook}, and by focusing on the expectation of what future states will look like we can consider this the intent of the agent. If we are accurately able to extract the intent of an \ac{rl} policy we are better able to explain the choice made and we are more comfortable with trusting that the choice made is a good decision. Concretely we hypothesise that by analyzing expected future states and events we could find the intent of the agent, which we could use to ensure the agent acts in a safe or desirable manner. The main question we aim to answer is what information, found in weights or design of the policy, or information extracted by knowing the weights and design, is the most important for separate prediction models to be able to predict future states and actions, in cases where we do not have access to a decent world model, or such a model does not exist.
-
-We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. First we will go a bit more in depth on what type of explainablity we want to use as well as describe relevant methods already used, then we will attempt to integrate previous and own methods into a \ac{marl} policy we construct and train, and at the end we will discuss our findings.
 
 \medskip
 \chapter{Background and Related Works}
@@ -238,7 +273,7 @@ Many \ac{rl} policies, especially deep \ac{rl} policies, which are the policies 
 Tracing how an observation leads to a state, through the action chosen and the environment, is often challenging in models constructed without this in mind. If we do not know the processing of information of a model it's very hard to explain the rationalisation of an agent.
 
 \subsubsection{Intrinsically Explainable Models}
-Intrinsically explainable models have the already stated drawback of relying on careful model construction, which can be challenging and may compromise model performance. While these models offer transparency from the outset, they are often less flexible and may not achieve the same level of accuracy as more complex \ac{rl} models. Given that we aim to analyze and compare already trained \ac{rl} policies, we will mostly focus on post hoc explainability methods in this thesis.
+Intrinsically explainable models have the already stated drawback of relying on careful model construction, which can be challenging and may impact model performance. While these models offer transparency from the get go, they are often less flexible and might not achieve the same level of accuracy as more complex \ac{rl} models. Given that we aim to analyze and compare already trained \ac{rl} policies, we will mostly focus on post hoc explainability methods in this thesis.
 
 \medskip
 
@@ -494,18 +529,18 @@ After 200 epochs the base prediction model reached a evaluation loss of 0.0407, 
 	\label{fig:pred_loss_one-hot} 
 \end{figure}
 
-\section{--Synergy/intent collision}
-Cooperation index
-
-\section{--Same intent for same state? Different policies?}
-Swap homogeneous agents to see intent difference
-
-\section{--Change environment, related to permutation importance}
-
-\section{--Feature importance}
-Detect which zombies agents care about
-
-\section{--Feature permutation changes, for other agents and zombies}
+% \section{--Synergy/intent collision}
+% Cooperation index
+%
+% \section{--Same intent for same state? Different policies?}
+% Swap homogeneous agents to see intent difference
+%
+% \section{--Change environment, related to permutation importance}
+%
+% \section{--Feature importance}
+% Detect which zombies agents care about
+%
+% \section{--Feature permutation changes, for other agents and zombies}
 
 
 \chapter{Experiments}
