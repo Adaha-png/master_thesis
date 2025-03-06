@@ -243,7 +243,7 @@ def run_train(
     for i in range(training_iters):
         result = algo.train()
         print(
-            f"Iteration {i+1}/{training_iters}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
+            f"Iteration {i + 1}/{training_iters}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
         )
         if not tuning:
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
