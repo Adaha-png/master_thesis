@@ -18,6 +18,7 @@ from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
 
 from memories.gtrxl import CustomGTrXLModel
+from memories.lstm_h import CustomLSTMModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -167,13 +168,14 @@ def run_train(
     }
 
     if memory == "lstm":
+        ModelCatalog.register_custom_model("custom_lstm", CustomLSTMModel)
         model_dict.update(
             {
-                "use_lstm": True,
-                "lstm_cell_size": 64,
-                "max_seq_len": 20,
-                "lstm_use_prev_action": True,
-                "lstm_use_prev_reward": True,
+                "custom_model": "custom_lstm",
+                "custom_model_config": {
+                    "hidden_dim": 256,
+                    "num_layers": 1,
+                },
             }
         )
     elif memory == "attention":

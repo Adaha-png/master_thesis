@@ -18,13 +18,13 @@
 \author{Ada Hatland}
 \date{August 2024}
 
+\pagenumbering{roman}
 \begin{document}
 \uiomasterfp[master, program={Informatics: Robotics and Intelligent Systems},
   color=orange, dept={Department of Informatics}, fac={The Faculty of Mathematics and Natural Sciences},
-  supervisors={Dr. Dennis Gro\ss \and Prof. Kyrre Glette\and Dr. Helge Spieker}, image =  {images/b1efc86c-d976-43a3-92e3-753ef0e114b0}]
+  supervisors={Dr. Dennis Gro\ss \and Prof. Kyrre Glette\and Dr. Helge Spieker}, image = {images/cat.png}]
 
 \renewcommand*\acffont{\textit}
-
 
 \section*{Acknowledgments}
 
@@ -46,6 +46,8 @@
     \acro  {nsga}  [NSGA-II]  {Non-Dominated Sorting Genetic Algorithm II}
     \acro  {nn}  [NN]  {Neural Network}
     \acro  {aec}  [AEC]  {Agent Environment Cycle}
+    \acro  {cnn}  [CNN]  {Convolutional Neural Network}
+    \acro  {drc}  [DRC]  {Deep Repeated ConvLSTM}
 \end{acronym}
 
 
@@ -56,16 +58,19 @@ This is the abstract
 \tableofcontents
 \chapter{Introduction}
 
+\pagenumbering{arabic}
 
 Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
 
 \section{Motivation}
+\label{sec:motivation}
 A significant problem with many deep machine learning models, including \ac{marl} policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a \ac{marl} system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
 
 All this essentially means, until the black box problem is solved, autopilot will always require a driver behind the wheel\cite{tian2018deeptest}. Despite having high accuracy, precision and recall, a reinforcement learning model might choose a less than preferable action in edge cases or states not well covered by training and test sets, for example driving on snowy roads when all images in the training data is from warmer climates, or combinations that aren't well covered, like a foggy, snowy road with a sharp right turn.
 With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a \ac{marl} setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
 
 \section{Problem statement}
+\label{sec:problem}
 The focus of this paper will be to rework and apply methods for general \ac{xai} to Reinforcement Learning, and expand on \ac{xrl} methods already developed. In particular we will focus on an agent and how the expected future states of other agents will affect it in its decision making process. The environment we will focus on is a \ac{marl} environment known as Knights Archers Zombies \cite{KAZ} made for Python. We use this because it is a cooperative environment where each agent has to consider other agents, both of the same type as itself, and other types. If we used an environment where all the agents are identical, our findings will be less useful for other environments where the agents aren't identical. In many real life scenarios agents will not be identical. If we once again consider autonomous vehicles, most vehicles are different in some way. A very obvious example of this is considering cars and motorcycles. Where because of their size difference, their paths chosen will often be different.
 
 In psychology it is well known that most human based decisions are made with intent\cite{inbook}, and by focusing on the expectation of what future states will look like we can consider this the intent of the agent. If we are accurately able to extract the intent of an \ac{rl} policy we are better able to explain the choice made and we are more comfortable with trusting that the choice made is a good decision. Concretely we hypothesise that by analyzing expected future states and events we could find the intent of the agent, which we could use to ensure the agent acts in a safe or desirable manner. The main question we aim to answer is what information, found in weights or design of the policy, or information extracted by knowing the weights and design, is the most important for separate prediction models to be able to predict future states and actions, in cases where we do not have access to a decent world model, or such a model does not exist.
@@ -76,6 +81,7 @@ We aim to construct a framework to describe the intent of the agents in the KAZ 
 
 Due to limited time and resources the size of policy or value networks, as well as any other \acp{nn} or otherwise computationally expensive algorithm used, will have to be significantly limited, this will impact results in a meaningful way, and therefore we will keep all \acp{nn} comparable sizes, and focus on doing experiments on how other factors than network size impact the results.
 
+We do not have access to any real world datasets, so its hard to ensure the methods we have developed will be directly applicable, however the results we get will still be relevant for later research in the area.
 \begin{figure}
 \begin{center}
 
@@ -111,8 +117,36 @@ Due to limited time and resources the size of policy or value networks, as well 
 \end{figure}
 
 \section{Research methods}
+\label{sec:research}
+This section describes the methods we use to answer the questions we have posed. The methodology mainly focuses on produced datasets made with a digital \ac{rl} environment, which does mean we have access to a world model, however as we want to answer the research questions without the use of a world model we will only be using the results of simulations to create our methods. The effect of this is that the methods will be compatible with \ac{rl} systems where we do not have access to a world model.
+
+Producing our own dataset has the benefit of no restrictions, other than hardware restrictions, on the datasets size. We can also produce variations of these datasets by altering the simulations used to create them which would in a real world setting often be impossible, e.g. access to gradients during inference.
+
+The datasets produced will be sets of full or partial trajectories in given environments along with other relevant data like integrated gradient, or Shapley values for the observations in the trajectories. We use these datasets to train predictive \acp{nn} with two main types. Event prediction, for example whether an agent encounters a critical state within the next 10 timesteps, which could represent a dangerous situation for an autonomous vehicle, and state prediction, which for example could be the x and y coordinates of a given agent 10 timesteps into the future.
+
+We will first be focusing on including explanations for the observations and observe and analyze the effects on event and state predictors, then we will be using \ac{nn} policies with access to memory and include their representation of memory along with the observation, hidden values for lstm, and attention matrix for GTrXL, and once again observe and analyze effect on the predictors.
+
 \section{Ethical considerations}
+\ac{marl} is an important field in development for military purposes\cite{military_marl}, and while this research is not supposed to effectivize warfare its possible that it ends up being relevant for unintended areas of research, including but not limited to military use-cases. This is especially the case because I aim to develop methods for general \ac{marl} use and not a specific area of research, like medicine or sports. It is more or less impossible to restrict access to these methods for specific areas of research.
+
+If this research aids to make \ac{marl} methods applicable to real world settings there is the possibility it risks increasing job displacement issues. This is an issue that affects most \ac{ai} research and can be mitigated by programs to reeducate people whose jobs it might affect, and increasing employment in developing and monitoring \ac{ai} tools.
+
+
 \section{Main contributions}
+As discussed in \ref{sec:motivation}, \ref{sec:problem} and \ref{sec:research}, there are certain specific objectives we aim to reach. In general we aim to expand on current future prediction research.
+
+\begin{itemize}
+
+    \item \textbf{Objective 1: Observation space}\\
+        Most current methods assumes the observation space to be image based, and bases research on information found in convolutional layers, either regular \acp{cnn}, or convLSTM layers.
+    \item \textbf{Objective 2: Feature importance as input}\\
+        Using feature importance from the policy to improve future predictions is a novel idea, and has potential to improve future predictions by a significant margin.
+
+    \item \textbf{Objective 3: Memory as input}\\
+        Earlier research has found that including hidden states from the \ac{drc} architecture had a significant effect on accuracy when predicting future states and events. We aim to expand on this and use hidden states from \acp{lstm} layers and observe the effect and analyze how it differs from using the ConvLSTM hidden values, as well as including attention from the GTrXL architecture.
+
+\end{itemize}
+
 \section{Thesis outline}
 This thesis will be structured as follows:
 \begin{itemize}
@@ -412,13 +446,13 @@ In the case of continuous actions we instead alter actions in multiple timesteps
 
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/best_counterfactuals.pdf}
+	% \includegraphics[width=\columnwidth]{images/best_counterfactuals.pdf}
 	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
 	\label{fig:pareto} 
 \end{figure}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
+	% \includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
 	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
 	\label{fig:pareto_model} 
 \end{figure}
@@ -433,7 +467,7 @@ The Shapley value can help us understand how the policy acts in general. We can 
 
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/spread_policy_move_up_shap.pdf}
+	% \includegraphics[width=\columnwidth]{images/spread_policy_move_up_shap.pdf}
 	\caption{Shapley values for moving up in a critical state in which the agent decided to move up with a confidence of 0.810}
 	\label{fig:shap} 
 \end{figure}
@@ -499,7 +533,7 @@ By integrating the gradient of the model prediction when going from a specified 
 \end{algorithm}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/intgrad_move_up.pdf}
+	% \includegraphics[width=\columnwidth]{images/intgrad_move_up.pdf}
 	\caption{Feature importance found with integrated gradients method in a state where the agent decided to move up with a confidence of 0.810}
 	\label{fig:intgrad} 
 \end{figure}
@@ -512,19 +546,19 @@ After 200 epochs the base prediction model reached a evaluation loss of 0.0407, 
 
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_none_none.pdf}
+	% \includegraphics[width=\columnwidth]{images/pred_model_none_none.pdf}
 	\caption{Loss on evaluation set during training with only observation as input}
 	\label{fig:pred_loss_none} 
 \end{figure}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_action_none.pdf}
+	% \includegraphics[width=\columnwidth]{images/pred_model_action_none.pdf}
 	\caption{Loss on evaluation set during training with observation and action as integer as input}
 	\label{fig:pred_loss_action} 
 \end{figure}
 
 \begin{figure}[!ht]
-	\includegraphics[width=\columnwidth]{images/pred_model_one-hot_none.pdf}
+	% \includegraphics[width=\columnwidth]{images/pred_model_one-hot_none.pdf}
 	\caption{Loss on evaluation set during training with observation and action one-hot encoded as input}
 	\label{fig:pred_loss_one-hot} 
 \end{figure}
