@@ -9,3 +9,4 @@ tex/main.log
 tex/main.toc
 .knights_archers_zombies_v10/*/prediction_data_part*
 .knights_archers_zombies_v10/*/prediction_test_data.xz
+.knights_archers_zombies_v10/*/tempdir

@@ -1,3 +1,4 @@
+import copy
 import glob
 import lzma
 import os
@@ -105,14 +106,13 @@ def get_torch_from_algo(algo, agent, memory):
 
 
 def compute(
-    policy_path,
+    net,
     agent,
     feature_names,
     act_dict,
     extras="none",
     explainer_extras="none",
     memory="no_memory",
-    seed=42,
     device=torch.device("cpu"),
 ):
     assert extras in ["none", "one-hot", "action"]
@@ -128,21 +128,10 @@ def compute(
     env.reset()
     env_name = env.metadata["name"]
 
-    ray.init(ignore_reinit_error=True)
-
-    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
-    policy_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
-
-    algo = PPO.from_checkpoint(policy_path)
-
-    net = get_torch_from_algo(algo, agent, memory)
-
-    ray.shutdown()
-
     if not os.path.exists(f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz"):
         print("Prediction data not found, creating...")
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
-        if len(paths) < 10:
+        if len(paths) < 5:
             paths = get_future_data(net, memory, seed=921, finished=paths)
 
         X = []
@@ -188,7 +177,7 @@ def compute(
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz"
+            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz"
         ):
             ig = IntegratedGradients(net)
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
@@ -221,52 +210,62 @@ def compute(
             )
         else:
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz"
+            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz"
         ):
             paths = glob.glob(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_*.xz"
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_*_shap.xz"
             )
             if len(paths) > 0:
                 path = paths[0]
                 with lzma.open(path, "rb") as f:
                     Obs_with_shap = pickle.load(f)
                     Obs_with_shap = numpyfy(Obs_with_shap)
-
-                X = [np.array([*X[i], *Obs_with_shap[i, -18:]]) for i in range(len(X))]
+                feats = len(env.feature_names)
+                X = [
+                    np.array([*X[i], *Obs_with_shap[i, -feats:]]) for i in range(len(X))
+                ]
 
                 with lzma.open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz",
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz",
                     "wb",
                 ) as f:
                     pickle.dump(X, f)
             else:
-                num_acts = env.action_space(agent + "_0").n
+                if not os.path.exists(
+                    f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                ):
+                    baseline = create_baseline(X)
+                    torch.save(
+                        baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                    )
+                else:
+                    baseline = torch.load(
+                        f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                        map_location=device,
+                        weights_only=True,
+                    )
 
-                expl = [
-                    kernel_explainer(net, agent, i, device, seed=372894 * (i + 1))
-                    for i in range(num_acts)
-                ]
-
+                baseline = baseline.to(torch.float32)
                 X = add_shap(
                     net,
                     agent,
                     memory,
                     X,
-                    expl,
+                    baseline,
                     device,
                     extras=extras,
                 )
 
         else:
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_shap_{extras}.xz",
+                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -395,7 +394,7 @@ def compute(
 
             elif explainer_extras == "shap":
                 paths = glob.glob(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_*_shap.xz"
+                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_shap_*.xz"
                 )
                 if len(paths) > 0:
                     path = paths[0]
@@ -408,20 +407,31 @@ def compute(
                         for i in tqdm(range(len(X_test)))
                     ]
                 else:
-                    num_acts = env.action_space(agent + "_0").n
+                    if not os.path.exists(
+                        f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                    ):
+                        baseline = create_baseline(X)
+                        torch.save(
+                            baseline,
+                            f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                        )
+                    else:
+                        baseline = torch.load(
+                            f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                            map_location=device,
+                            weights_only=True,
+                        )
 
-                    expl = [
-                        kernel_explainer(net, X, i, device) for i in range(num_acts)
-                    ]
-
+                    baseline = baseline.to(torch.float32)
                     X_test = add_shap(
                         net,
                         agent,
                         memory,
                         X_test,
-                        expl,
+                        baseline,
                         device,
                         extras=extras,
+                        test=True,
                     )
 
             with lzma.open(
@@ -469,8 +479,9 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
         X = numpyfy(X)
 
     env = env_creator()
-    feature_names = env.feature_names
+    feature_names = copy.deepcopy(env.feature_names)
 
+    print(feature_names)
     if extras == "action":
         feature_names.append("action")
     elif extras == "one-hot":
@@ -483,6 +494,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
                 for feature_name in env.feature_names
             ]
         )
+
     if isinstance(explainer, list):
         for i, expl in enumerate(explainer):
             shap_plot(
@@ -492,6 +504,8 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
                 expl,
                 feature_names,
                 i,
+                extras,
+                explainer_extras,
             )
     else:
         shap_plot(
@@ -501,19 +515,34 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
             explainer,
             feature_names,
             None,
+            extras,
+            explainer_extras,
         )
 
 
 def run_compare(policy_path, agent, memory, feature_names, act_dict, device):
-    extras = ["none", "action", "one-hot"]
+    extras = ["action", "one-hot", "none"]
     explainer_extras = ["none", "ig", "shap"]
 
     table = np.zeros((3, len(extras), len(explainer_extras)))
 
+    ray.init(ignore_reinit_error=True)
+    env_name = env_creator().metadata["name"]
+
+    register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
+    policy_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
+
+    algo = PPO.from_checkpoint(policy_path)
+
+    net = get_torch_from_algo(algo, agent, memory)
+
+    ray.shutdown()
+
     for i, extra in enumerate(extras):
         for j, expl in enumerate(explainer_extras):
+            print(f"Computing for {extra=} and {expl=}")
             outs = compute(
-                policy_path,
+                net,
                 agent,
                 feature_names,
                 act_dict,
