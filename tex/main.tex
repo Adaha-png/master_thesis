@@ -26,7 +26,12 @@
 
 \renewcommand*\acffont{\textit}
 
+\section*{Declaration of AI use}
+In this thesis generative models have been used for topic suggestion, a small part of figure creation, equations and parts of the code used for creating plots, as well as debugging and documentation. All code suggested has been verified by a human. Generative models have \textbf{not} been used for text generation. I, the author, take full responsibility for the contents of this thesis.
+
+
 \section*{Acknowledgments}
+I would like to thank my external supervisor Dennis Gro\ss, as well as my internal supervisor Kyrre Glette for their guidance and support in writing this thesis. They have been of significant help when discussing how to proceed and what remains on the to-do list. I would also like to thank my cat Nokia for emotional support throughout the writing of this thesis.
 
 \section*{List of Acronyms}
 \begin{acronym}[ICANN]
@@ -48,6 +53,7 @@
     \acro  {aec}  [AEC]  {Agent Environment Cycle}
     \acro  {cnn}  [CNN]  {Convolutional Neural Network}
     \acro  {drc}  [DRC]  {Deep Repeated ConvLSTM}
+    \acro  {pomdp}  [POMDP]  {Partially Observable Markov Decision Process}
 \end{acronym}
 
 
@@ -139,6 +145,7 @@ As discussed in \ref{sec:motivation}, \ref{sec:problem} and \ref{sec:research}, 
 
     \item \textbf{Objective 1: Observation space}\\
         Most current methods assumes the observation space to be image based, and bases research on information found in convolutional layers, either regular \acp{cnn}, or convLSTM layers.
+
     \item \textbf{Objective 2: Feature importance as input}\\
         Using feature importance from the policy to improve future predictions is a novel idea, and has potential to improve future predictions by a significant margin.
 
@@ -156,12 +163,12 @@ This thesis will be structured as follows:
 
     \item \textbf{Chapter 3: Methodology}\\
         This chapter discusses the specific principles, procedures and techniques used to conduct the \ac{xrl} research done in this thesis, to ensure that the results we get are valid and reliable.
+
     \item \textbf{Chapter 4: Experiments}\\
         This chapter details the setup, results and analysis of the specific experiments we use to evaluate the hypothesis and answer research questions based on certain evaluation metrics, and baseline comparisons.
 
     \item \textbf{Chapter 5: Discussion}\\
         This chapter will analyze the results of the experiments and discuss their implication for \ac{xrl} research. It will also contain the limitations of our work and briefly discuss how to expand on any research done.
-
 
 \end{itemize}
 
@@ -211,6 +218,9 @@ This thesis will be structured as follows:
 \chapter{Background and Related Works}
 
 \section{Reinforcement Learning Fundamentals}
+To make sure all methods are understood well its important to make sure we have a proper understanding of the fundamentals of \ac{rl}, especially \ac{drl} and \ac{marl}. This section will go over the basics needed.
+
+
 \subsection{Markov Decision Process in Reinforcement Learning}
 
 A \ac{mdp} is a framework used to model decision-making in stochastic environments, like we want to in an \ac{rl} task. It is defined by a tuple with 5 elements:
@@ -289,7 +299,50 @@ In contrast, model-free reinforcement learning does not learn or utilize an expl
 
 Model-based methods enable explicit planning by using the learned environment transitions in methods such as Monte Carlo Tree Search \cite{_wiechowski_2022}, while model-free methods rely on direct experience to optimize behavior. We will be using \ac{ppo} to optimize our algorithms, and will not be using simulations or any other form of explicit planning, ensuring that the methods developed will be applicable in the most amount of environments.
 
+\subsection{Recurrency in Deep Reinforcement Learning Policies}
+Recurrency in \ac{nn} is a way to carry over information from previous timesteps to current ones, if we believe that information could be useful. \acp{rnn} are sometimes used when constructing the architecture of \ac{drl} policies \cite{hausknecht2017deeprecurrentqlearningpartially}, mainly for two reasons. The first one is for when your environment can be modeled as a \ac{pomdp}, in which case memory is important as the current observation is not always enough to capture all the information an agent could have. The second reason is for planning, like in the \ac{drc} architecture\cite{guez2019investigationmodelfreeplanning}. See figure \ref{fig:rnn}.
 
+\begin{center}
+\begin{figure}
+    \hspace{3.5cm}
+    \begin{tikzpicture}[>=stealth, auto, node distance=1.5cm and 2cm]
+
+    \begin{scope}[shift={(4,0)}, rotate=90]
+  
+    % Time step 1
+    \node (x1) [draw, rectangle, fill=blue!20, minimum width=1cm, minimum height=0.7cm] {$x_1$};
+    \node (h1) [draw, circle, fill=red!20, right=of x1] {$h_1$};
+    \node (y1) [draw, rectangle, fill=green!20, right=of h1, minimum width=1cm, minimum height=0.7cm] {$y_1$};
+
+    % Time step 2
+    \node (x2) [draw, rectangle, fill=blue!20, below=of x1, minimum width=1cm, minimum height=0.7cm] {$x_2$};
+    \node (h2) [draw, circle, fill=red!20, right=of x2] {$h_2$};
+    \node (y2) [draw, rectangle, fill=green!20, right=of h2, minimum width=1cm, minimum height=0.7cm] {$y_2$};
+
+    % Time step 3
+    \node (x3) [draw, rectangle, fill=blue!20, below=of x2, minimum width=1cm, minimum height=0.7cm] {$x_3$};
+    \node (h3) [draw, circle, fill=red!20, right=of x3] {$h_3$};
+    \node (y3) [draw, rectangle, fill=green!20, right=of h3, minimum width=1cm, minimum height=0.7cm] {$y_3$};
+
+    % Forward connections within each time step (black)
+    \draw[->, thick, black] (x1) -- (h1);
+    \draw[->, thick, black] (h1) -- (y1);
+  
+    \draw[->, thick, black] (x2) -- (h2);
+    \draw[->, thick, black] (h2) -- (y2);
+  
+    \draw[->, thick, black] (x3) -- (h3);
+    \draw[->, thick, black] (h3) -- (y3);
+
+    % Recurrent connections between hidden states (orange)
+    \draw[->, thick, orange] (h1) -- (h2) node[midway, right=4pt] {$W_h$};
+    \draw[->, thick, orange] (h2) -- (h3) node[midway, right=4pt] {$W_h$};
+    \end{scope}
+\end{tikzpicture}
+\caption{Recurrent neural network}
+\label{fig:rnn}
+\end{figure}
+\end{center}
 \section{Approaches to Explainability in Reinforcement Learning}
 \subsection{Post Hoc vs. Intrinsically Explainable Models}
 This section will discuss benefits and drawbacks of explainable models divided into two main categories, Post hoc models and intrinsically explainable models.
@@ -392,8 +445,20 @@ There are 4 hypothesises tested by the paper. The last two considers laymen user
 
 
 \section{Related Works}
+This section describes recent development in the field of planning and future predictions. All the papers described here are directly relevant to the methods i developed.
+
 \subsection{Predicting Future Actions Of Reinforcement Learning Agents}
+This paper describes a method developed by the author that predicts future actions and events \cite{chung2024predictingfutureactionsreinforcement}. It does this for non planning policies, like Impala, implicit planning policies like \ac{drc}, see section \ref{sec:impl_planning}, and explicit planning policies like MuZero and Thinker.
+
+Non planning policies are policies designed without planning in mind. Pure \ac{nn} policies without recurrency are considered to be non planning, as they have not been found to exhibit planning like behaviour. This paper found that when predicting future states and actions both inner states from implicit planners, and explicit planners improved accuracy over non planning agents.
+
+Explicit planners are agents who simulate future states with a world model before making a decision on what action to take. They rely on the world model being accurate, and so does using them to predict future states and actions. In some environments learning an accurate world model is not feasible, an example of this is autonomous driving.
+
+The paper proposes two methods on predicting future states and actions, simulation based and inner state based. The inner state approach is most effective when working with explicit planners, but also shows significant improvement for implicit planner agents. The simulation based approach performs very well on implicit planner agents, but requires the opportunity to train a decently performing world model. The paper also shows with an ablated world model, the inner state approach performs better.
+
 \subsection{An Investigation of Model Free Planning}
+\label{sec:impl_planning}
+
 \subsection{Stabilizing Transformers for Reinforcement Learning}
 
 \medskip
@@ -563,25 +628,19 @@ After 200 epochs the base prediction model reached a evaluation loss of 0.0407, 
 	\label{fig:pred_loss_one-hot} 
 \end{figure}
 
-% \section{--Synergy/intent collision}
-% Cooperation index
-%
-% \section{--Same intent for same state? Different policies?}
-% Swap homogeneous agents to see intent difference
-%
-% \section{--Change environment, related to permutation importance}
-%
-% \section{--Feature importance}
-% Detect which zombies agents care about
-%
-% \section{--Feature permutation changes, for other agents and zombies}
 
 
 \chapter{Experiments}
-
 \section{General experimental setup}
+We have several \acp{nn} for each experiment. The goal is to train them to predict states and events. For the state prediction I initially trained a \ac{nn} to take the observations made by a type of agent from step $n$ and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_pos$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
 
-\section{Experiment 1}
+We also trained a \ac{nn} for event prediction. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps.
+
+The \ac{nn} was a fully connected network, had two hidden layers of size 64 each and used the activation function $tanh$. This neural network got an accuracy of placeholder on the test set and the average distance from target was placeholder on the test set. This \ac{nn} is purely a post hoc explainer and used no information about the policy what so ever to explain the agents intention. As aforementioned we want to include information about the policy to discover how we can improve this prediction, and better discover the intent of the agent.
+
+All hyper parameters stayed the same. Only The dataset, and therefore also the input layer, was different between the runs. I trained the networks for a total of $200$ epochs, after which improvement was negligible, if at all existent, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set.
+
+\section{Action inclusion}
 \subsection{Setup}
 \subsection{Results}
 \subsection{Analysis}
