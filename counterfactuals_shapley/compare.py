@@ -38,7 +38,7 @@ def distance(predicted, y):
     return np.linalg.norm(predicted - y, axis=1)
 
 
-def extract_observations(history, agent_name, n, m):
+def extract_observations(history, agent_name, memory, n, m):
     obs_n = []
     obs_n_plus_m = []
 
@@ -47,7 +47,12 @@ def extract_observations(history, agent_name, n, m):
         step_record = history[n]
         for agent, data in step_record.items():
             if agent.startswith(agent_name):
-                obs_n.append(data.get("observation"))
+                if memory != "no_memory":
+                    print(f"{data.get('memory')=}")
+                    exit(0)
+                else:
+                    obs_n.append(data.get("observation"))
+
     else:
         return
 
@@ -62,10 +67,14 @@ def extract_observations(history, agent_name, n, m):
     return obs_n, obs_n_plus_m
 
 
-def extract_pairs_from_histories(histories, agent_name, m, n=None):
+def extract_pairs_from_histories(histories, agent_name, memory, m, n=None):
     obs_pairs = [
         extract_observations(
-            history, agent_name, n or np.random.randint(0, max(1, len(history) - m)), m
+            history,
+            agent_name,
+            memory,
+            n or np.random.randint(0, max(1, len(history) - m)),
+            m,
         )
         for history in tqdm(histories, desc="extracting obs and pos")
     ]
@@ -85,7 +94,7 @@ def extract_pairs_from_histories(histories, agent_name, m, n=None):
     return np.array(initial_observations), np.array(later_observations)
 
 
-def get_torch_from_algo(algo, agent, memory):
+def get_torch_from_algo(algo, agent, memory, logits=False):
     env = env_creator()
     path_ider = f".{env.metadata['name']}/{memory}/{agent}/torch/*.pt"
     torch_path = glob.glob(path_ider)
@@ -98,11 +107,15 @@ def get_torch_from_algo(algo, agent, memory):
         torch_path = glob.glob(path_ider)
         policy_net = torch.load(torch_path[0], weights_only=False)
 
-    net_with_softmax = nn.Sequential(
-        policy_net._hidden_layers, policy_net._logits, nn.Softmax(dim=0)
-    )
+    if logits:
+        net = nn.Sequential(policy_net._hidden_layers, policy_net._logits)
 
-    return net_with_softmax
+    else:
+        net = nn.Sequential(
+            policy_net._hidden_layers, policy_net._logits, nn.Softmax(dim=0)
+        )
+
+    return net
 
 
 def compute(
@@ -132,7 +145,7 @@ def compute(
         print("Prediction data not found, creating...")
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         if len(paths) < 5:
-            paths = get_future_data(net, memory, seed=921, finished=paths)
+            paths = get_future_data(net, memory, agent, seed=921, finished=paths)
 
         X = []
         y = []
@@ -140,7 +153,7 @@ def compute(
             with lzma.open(path, "rb") as f:
                 seq = pickle.load(f)
 
-            partX, party = extract_pairs_from_histories(seq, agent, 10)
+            partX, party = extract_pairs_from_histories(seq, agent, memory, 10)
             X.extend(partX)
             y.extend(party)
 
@@ -454,7 +467,7 @@ def compute(
         max_distance = np.max(distances)
 
     plot_paths = glob.glob(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/*_{extras}_{explainer_extras}_shap.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
     if len(plot_paths) != len(y[0]):
@@ -481,7 +494,6 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
     env = env_creator()
     feature_names = copy.deepcopy(env.feature_names)
 
-    print(feature_names)
     if extras == "action":
         feature_names.append("action")
     elif extras == "one-hot":
@@ -520,7 +532,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
         )
 
 
-def run_compare(policy_path, agent, memory, feature_names, act_dict, device):
+def run_compare(agent, memory, feature_names, act_dict, device):
     extras = ["action", "one-hot", "none"]
     explainer_extras = ["none", "ig", "shap"]
 

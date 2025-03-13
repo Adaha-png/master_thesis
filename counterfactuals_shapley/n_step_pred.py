@@ -95,7 +95,9 @@ def add_shap(
     return new_X
 
 
-def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
+def add_ig(
+    net, agent, memory, X, ig, device, extras="none", save=True, name_ider="pred_data"
+):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -135,11 +137,11 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
             ]
     if save:
         os.makedirs(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data",
+            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}",
             exist_ok=True,
         )
         with lzma.open(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_{extras}_ig.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -154,7 +156,7 @@ def pred(net, n, device, X):
     return net(X).cpu().detach().numpy()[:, n]
 
 
-def add_action(X, net, agent, memory, save=True):
+def add_action(X, net, agent, memory, name_ider="pred_data", save=True):
     X = torch.Tensor(X)
     with torch.no_grad():
         new_X = [
@@ -168,8 +170,11 @@ def add_action(X, net, agent, memory, save=True):
         ]
         if save:
             env = env_creator()
+            os.makedirs(
+                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+            )
             with lzma.open(
-                f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_action.xz",
+                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_action.xz",
                 "wb",
             ) as f:
                 pickle.dump(new_X, f)
@@ -178,7 +183,7 @@ def add_action(X, net, agent, memory, save=True):
 
 def one_hot_action(X):
     X = numpyfy(X)
-    num = round(max(X[:, -1]) - min(X[:, -1]) + 1)
+    num = len(env_creator().act_dict.values())
     new_X = numpyfy([[*obs[:-1], *np.eye(num)[round(obs[-1])]] for obs in X])
     return new_X
 
@@ -194,6 +199,7 @@ def future_sight(
     extras="none",
     explainer_extras="none",
     criterion=None,
+    name_ider="pred_models",
 ):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -211,16 +217,17 @@ def future_sight(
         extras=extras,
         explainer_extras=explainer_extras,
         criterion=criterion,
+        name_ider=name_ider,
     )
 
     env = env_creator()
     env_name = env.metadata["name"]
     env.close()
 
-    os.makedirs(f".{env_name}/{memory}/{agent}/pred_models", exist_ok=True)
+    os.makedirs(f".{env_name}/{memory}/{agent}/{name_ider}", exist_ok=True)
     torch.save(
         net.state_dict(),
-        f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+        f".{env_name}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pt",
     )
     return net
 
@@ -228,6 +235,7 @@ def future_sight(
 def get_future_data(
     net,
     memory,
+    agent,
     amount_cycles=100000,
     steps_per_cycle=100,
     test=False,
@@ -237,11 +245,17 @@ def get_future_data(
     if ray.is_initialized():
         ray.shutdown()
 
+    env = env_creator()
+    env_name = env.metadata["name"]
+
+    n_agents = len([ag for ag in env.possible_agents if agent in ag])
+    print(n_agents)
+
     if test:
         training_packs = 1
     else:
-        training_packs = 5
-    env_name = env_creator().metadata["name"]
+        training_packs = np.ceil(10 / n_agents)
+
     paths = []
     with torch.no_grad():
         for i in range(0, training_packs):
@@ -251,12 +265,14 @@ def get_future_data(
                 path = f".{env_name}/{memory}/prediction_data_part{i}.xz"
             if path in finished:
                 continue
+
             sim_part = partial(sim_steps, net, steps_per_cycle, memory)
-            # Compute the list of seed values for this training pack.
+
             seed_values = [
                 seed + i * (amount_cycles // training_packs) + j
                 for j in range(amount_cycles // training_packs)
             ]
+
             results = [sim_part(seed_value) for seed_value in tqdm(seed_values)]
             paths.append(path)
             with lzma.open(path, "wb") as f:
@@ -285,6 +301,7 @@ def train_net(
     extras="none",
     explainer_extras="none",
     criterion=None,
+    name_ider="pred_models",
 ):
     # Convert data to PyTorch tensors
     if isinstance(criterion, nn.CrossEntropyLoss):
@@ -354,9 +371,11 @@ def train_net(
     plt.title("Loss on evaluation set during training")
     env = env_creator()
 
-    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
+    os.makedirs(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+    )
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/pred_model_{extras}_{explainer_extras}.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
     )
 
     # Evaluate on test data

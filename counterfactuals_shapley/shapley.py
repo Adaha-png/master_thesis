@@ -10,14 +10,15 @@ from counterfactuals_shapley.wrappers import numpyfy
 from train_tune_eval.rllib_train import env_creator
 
 
-def pred(net, act, device, obs):
+def pred(net, target, device, obs):
     obs = torch.tensor(obs).unsqueeze(0).to(device, dtype=torch.float32)
+    obs.squeeze()
     vals = net(obs)
 
-    if act == None:
+    if target == None:
         vals = vals.unsqueeze(0).cpu().detach().numpy()
     else:
-        vals = vals.cpu().detach().numpy()[0, :, act]
+        vals = vals.cpu().detach().numpy()[0, :, target]
     return vals
 
 
@@ -40,6 +41,7 @@ def shap_plot(
 ):
     env = env_creator()
     # Compute SHAP values for the given dataset X
+    print(f"{X.shape=}")
     shap_values = explainer.shap_values(X)
 
     # Handling the case where SHAP values contains multiple outputs
