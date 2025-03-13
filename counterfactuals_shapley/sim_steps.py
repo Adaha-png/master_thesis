@@ -70,7 +70,7 @@ def sim_steps_partial(env, policy, seq, num_steps=20, seed=None):
     return rollout
 
 
-def sim_steps(net, num_steps, seed):
+def sim_steps(net, num_steps, memory, seed):
     env = env_creator()
     observations, _ = env.reset(seed)
 
@@ -92,6 +92,8 @@ def sim_steps(net, num_steps, seed):
                 "action": actions[agent],
                 "reward": rewards.get(agent),
             }
+            if memory != "no_memory":
+                step_record[agent]["memory"] = net.get_extra_action_out()
 
         history.append(step_record)
 

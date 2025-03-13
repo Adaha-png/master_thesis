@@ -3,12 +3,12 @@ import lzma
 import os
 import pickle
 from functools import partial
-from multiprocessing import Pool
 
 import matplotlib.pyplot as plt
 import numpy as np
 import ray
 import torch
+from captum.attr import KernelShap
 from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
 from torch import nn
@@ -22,12 +22,38 @@ from .wrappers import numpyfy
 load_dotenv()
 
 
+def get_new_obs(obs, extras, net, shap, num_acts, baseline):
+    """
+    Computes SHAP values for a single observation and returns
+    the concatenation of the original observation and its SHAP values.
+    """
+    if extras == "one-hot":
+        action_idx = torch.argmax(obs[-num_acts:]).item()
+        shap_obs = obs[:-num_acts]
+    elif extras == "action":
+        action_idx = obs[-1].item()
+        shap_obs = obs[:-1]
+    else:
+        action_idx = int(np.argmax(net.forward(obs)))
+        shap_obs = obs[:]
+
+    if shap_obs.ndim == 1:
+        shap_obs = shap_obs.unsqueeze(0)
+    action_idx = int(action_idx)
+
+    shap_values = shap.attribute(
+        shap_obs, baselines=baseline, target=action_idx
+    ).squeeze()
+
+    return torch.cat((obs, shap_values))
+
+
 def add_shap(
     net,
     agent,
     memory,
     X,
-    expl,
+    baseline,
     device,
     test=False,
     extras="none",
@@ -43,37 +69,25 @@ def add_shap(
     num_acts = env.action_space(agent + "_0").n
     env.close()
 
-    # Function to get the SHAP values and construct new observation
-    def get_new_obs(obs, extras_type, net):
-        obs_np = obs.cpu().numpy()
-        if extras_type == "one-hot":
-            action_idx = torch.argmax(obs[-num_acts:]).item()
-            shap_values = expl[action_idx].shap_values(obs_np[:-num_acts])
-        elif extras_type == "action":
-            action_idx = obs[-1].item()
-            shap_values = expl[int(action_idx)].shap_values(obs_np[:-1])
-        else:
-            action_idx = int(
-                np.argmax(
-                    net.forward(
-                        obs,
-                    )
-                )
-            )
-            shap_values = expl[action_idx].shap_values(obs_np)
+    X = torch.Tensor(X).cpu()
 
-        return np.concatenate((obs_np, shap_values))
+    with torch.no_grad():
+        shap = KernelShap(net)
+        new_X = [
+            get_new_obs(obs, extras, net, shap, num_acts, baseline) for obs in tqdm(X)
+        ]
 
-    new_X = [get_new_obs(obs, extras, net) for obs in tqdm(X, desc="Adding shapley")]
+    new_X = numpyfy(new_X)
+
     if not test:
         with lzma.open(
-            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/prediction_data_shap_{extras}.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/{path_ider}/prediction_data_{extras}_shap.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
     else:
         with lzma.open(
-            f"{env.metadata['name']}/{agent}/{memory}/{path_ider}/test_data_shap_{extras}.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/{path_ider}/test_data_{extras}_shap.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -81,7 +95,9 @@ def add_shap(
     return new_X
 
 
-def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
+def add_ig(
+    net, agent, memory, X, ig, device, extras="none", save=True, name_ider="pred_data"
+):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -121,11 +137,11 @@ def add_ig(net, agent, memory, X, ig, device, extras="none", save=True):
             ]
     if save:
         os.makedirs(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data",
+            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}",
             exist_ok=True,
         )
         with lzma.open(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_ig_{extras}.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_{extras}_ig.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -140,7 +156,8 @@ def pred(net, n, device, X):
     return net(X).cpu().detach().numpy()[:, n]
 
 
-def add_action(X, net, agent, memory, save=True):
+def add_action(X, net, agent, memory, name_ider="pred_data", save=True):
+    X = torch.Tensor(X)
     with torch.no_grad():
         new_X = [
             numpyfy(
@@ -153,8 +170,11 @@ def add_action(X, net, agent, memory, save=True):
         ]
         if save:
             env = env_creator()
+            os.makedirs(
+                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+            )
             with lzma.open(
-                f".{env.metadata['name']}/{agent}/{memory}/pred_data/prediction_data_action.xz",
+                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_action.xz",
                 "wb",
             ) as f:
                 pickle.dump(new_X, f)
@@ -163,7 +183,7 @@ def add_action(X, net, agent, memory, save=True):
 
 def one_hot_action(X):
     X = numpyfy(X)
-    num = round(max(X[:, -1]) - min(X[:, -1]) + 1)
+    num = len(env_creator().act_dict.values())
     new_X = numpyfy([[*obs[:-1], *np.eye(num)[round(obs[-1])]] for obs in X])
     return new_X
 
@@ -179,6 +199,7 @@ def future_sight(
     extras="none",
     explainer_extras="none",
     criterion=None,
+    name_ider="pred_models",
 ):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -196,16 +217,17 @@ def future_sight(
         extras=extras,
         explainer_extras=explainer_extras,
         criterion=criterion,
+        name_ider=name_ider,
     )
 
     env = env_creator()
     env_name = env.metadata["name"]
     env.close()
 
-    os.makedirs(f".{env_name}/{memory}/{agent}/pred_models", exist_ok=True)
+    os.makedirs(f".{env_name}/{memory}/{agent}/{name_ider}", exist_ok=True)
     torch.save(
         net.state_dict(),
-        f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+        f".{env_name}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pt",
     )
     return net
 
@@ -213,6 +235,7 @@ def future_sight(
 def get_future_data(
     net,
     memory,
+    agent,
     amount_cycles=100000,
     steps_per_cycle=100,
     test=False,
@@ -222,11 +245,17 @@ def get_future_data(
     if ray.is_initialized():
         ray.shutdown()
 
+    env = env_creator()
+    env_name = env.metadata["name"]
+
+    n_agents = len([ag for ag in env.possible_agents if agent in ag])
+    print(n_agents)
+
     if test:
         training_packs = 1
     else:
-        training_packs = 10
-    env_name = env_creator().metadata["name"]
+        training_packs = np.ceil(10 / n_agents)
+
     paths = []
     with torch.no_grad():
         for i in range(0, training_packs):
@@ -236,12 +265,14 @@ def get_future_data(
                 path = f".{env_name}/{memory}/prediction_data_part{i}.xz"
             if path in finished:
                 continue
-            sim_part = partial(sim_steps, net, steps_per_cycle)
-            # Compute the list of seed values for this training pack.
+
+            sim_part = partial(sim_steps, net, steps_per_cycle, memory)
+
             seed_values = [
                 seed + i * (amount_cycles // training_packs) + j
                 for j in range(amount_cycles // training_packs)
             ]
+
             results = [sim_part(seed_value) for seed_value in tqdm(seed_values)]
             paths.append(path)
             with lzma.open(path, "wb") as f:
@@ -270,6 +301,7 @@ def train_net(
     extras="none",
     explainer_extras="none",
     criterion=None,
+    name_ider="pred_models",
 ):
     # Convert data to PyTorch tensors
     if isinstance(criterion, nn.CrossEntropyLoss):
@@ -339,9 +371,11 @@ def train_net(
     plt.title("Loss on evaluation set during training")
     env = env_creator()
 
-    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
+    os.makedirs(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+    )
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/pred_model_{extras}_{explainer_extras}.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
     )
 
     # Evaluate on test data

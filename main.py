@@ -1,17 +1,21 @@
-import glob
 import os
 import random
 from functools import partial
 
 import numpy as np
 import optuna
+import ray
 import torch
 from dotenv import load_dotenv
+from ray.rllib.algorithms.ppo import PPO
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+from ray.tune.registry import register_env
 
 import counterfactuals_shapley.compare as compare
 import counterfactuals_shapley.crit_state_pred as crit_state_pred
 import train_tune_eval.rllib_train as rllib_train
 import train_tune_eval.rllib_tune as tune
+from counterfactuals_shapley.compare import get_torch_from_algo, make_plots
 from train_tune_eval.rllib_train import env_creator
 
 load_dotenv()
@@ -89,10 +93,45 @@ if __name__ == "__main__":
     )
 
     agent = env.possible_agents[0].split("_")[0]
-    compare.run_compare(
-        policy_path, agent, memory, env.feature_names, env.act_dict, device
-    )
 
-    crit_state_pred.crit_compare(
-        policy_path, agent, memory, env.feature_names, env.act_dict
-    )
+    crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
+
+    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
+
+    for memory in ["lstm", "attention"]:
+        policy_path = get_policy(
+            should_tune=True, new_policy=True, timesteps=2000000, memory=memory
+        )
+        ray.init(ignore_reinit_error=True)
+        env_name = env_creator().metadata["name"]
+
+        register_env(
+            env_name, lambda config: ParallelPettingZooEnv(env_creator(config))
+        )
+        policy_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
+
+        algo = PPO.from_checkpoint(policy_path)
+
+        net = get_torch_from_algo(algo, agent, memory)
+
+        ray.shutdown()
+
+        crit_state_pred.compute(
+            net,
+            agent,
+            env.feature_names,
+            env.act_dict,
+            extras="one-hot",
+            explainer_extras="shapley",
+            memory=memory,
+            device=device,
+        )
+        compare.compute(
+            net,
+            agent,
+            env.feature_names,
+            env.act_dict,
+            extras="one-hot",
+            explainer_extras="shap",
+            memory=memory,
+        )

@@ -5,34 +5,43 @@ import matplotlib.pyplot as plt
 import numpy as np
 import shap
 import torch
-from tqdm import tqdm
 
-from counterfactuals_shapley.sim_steps import sim_steps
 from counterfactuals_shapley.wrappers import numpyfy
 from train_tune_eval.rllib_train import env_creator
 
 
-def pred(net, act, device, obs):
+def pred(net, target, device, obs):
     obs = torch.tensor(obs).unsqueeze(0).to(device, dtype=torch.float32)
+    obs.squeeze()
     vals = net(obs)
 
-    if act == None:
+    if target == None:
         vals = vals.unsqueeze(0).cpu().detach().numpy()
     else:
-        vals = vals.cpu().detach().numpy()[0, :, act]
+        vals = vals.cpu().detach().numpy()[0, :, target]
     return vals
 
 
 def kernel_explainer(net, X, target, device):
+    X = numpyfy(X)
+    try:
+        net(torch.Tensor(X[0]))
+    except RuntimeError:
+        feats = len(env_creator().feature_names)
+        X = X[:, :feats]
+
     explainer = shap.KernelExplainer(
-        partial(pred, net, target, device), shap.kmeans(X, 100)
+        partial(pred, net, target, device), shap.kmeans(X, 200)
     )
     return explainer
 
 
-def shap_plot(agent, memory, X, explainer, feature_names, target):
+def shap_plot(
+    agent, memory, X, explainer, feature_names, target, extras, explainer_extras
+):
     env = env_creator()
     # Compute SHAP values for the given dataset X
+    print(f"{X.shape=}")
     shap_values = explainer.shap_values(X)
 
     # Handling the case where SHAP values contains multiple outputs
@@ -99,29 +108,9 @@ def shap_plot(agent, memory, X, explainer, feature_names, target):
     os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
 
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_shap.pgf".replace(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{target}_{extras}_{explainer_extras}_shap.pgf".replace(
             " ", "_"
         ),
         backend="pgf",
     )
     plt.close()
-
-
-def get_data(net, agent, total_steps=10000, steps_per_cycle=100, seed=None):
-    observations = []
-    actions = []
-    num_cycles = total_steps // steps_per_cycle
-    with torch.no_grad():
-        for i in tqdm(range(num_cycles), desc="Simulating cycles"):
-            if seed:
-                step_results = sim_steps(net, steps_per_cycle, seed=seed + i + 200)
-            else:
-                step_results = sim_steps(net, steps_per_cycle, 378429)
-
-            for entry in step_results:
-                obs = entry.get("observation")
-                act = entry.get("action")
-                if obs is not None and act is not None:
-                    actions.append(act[agent])
-                    observations.append(obs[agent])
-        return numpyfy(observations), numpyfy(actions)
