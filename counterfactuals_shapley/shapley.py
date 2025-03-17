@@ -24,9 +24,10 @@ def pred(net, target, device, obs):
 
 def kernel_explainer(net, X, target, device):
     X = numpyfy(X)
+
     try:
-        net(torch.Tensor(X[0]))
-    except RuntimeError:
+        net(torch.Tensor(X[0]).to(device))
+    except RuntimeError as e:
         feats = len(env_creator().feature_names)
         X = X[:, :feats]
 

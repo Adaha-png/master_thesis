@@ -1,3 +1,4 @@
+import glob
 import multiprocessing
 import os
 import random
@@ -16,6 +17,7 @@ from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
+from torch import nn
 
 from memories.gtrxl import CustomGTrXLModel
 from memories.lstm_h import CustomLSTMModel
@@ -58,6 +60,12 @@ def simple_spread_env(config):
         + agent_feature_names
         + comms_feature_names
     )
+    full_feature_names = []
+    frames = 4
+    for i in range(frames):
+        for name in feature_names:
+            full_feature_names.append(f"{name}, {i}")
+
     act_dict = {
         0: "no action",
         1: "move left",
@@ -67,13 +75,13 @@ def simple_spread_env(config):
     }
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
-    env = ss.frame_stack_v2(env)
+    env = ss.frame_stack_v2(env, stack_size=frames)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
 
     setattr(env, "act_dict", act_dict)
-    setattr(env, "feature_names", feature_names)
+    setattr(env, "feature_names", full_feature_names)
 
     return env
 
@@ -138,7 +146,7 @@ def kaz_env(config):
 
 def env_creator(config={}):
     config["seed"] = random.randint(0, 1000000000)
-    return kaz_env(config)
+    return simple_spread_env(config)
 
 
 def run_train(
@@ -162,35 +170,24 @@ def run_train(
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
     steps_per_iter = 20000
 
-    model_dict = {
-        "fcnet_hiddens": [64, 64],
-        "fcnet_activation": "tanh",
-    }
+    if memory == "no_memory":
+        model_dict = {
+            "fcnet_hiddens": [64, 64],
+            "fcnet_activation": "tanh",
+        }
 
-    if memory == "lstm":
+    elif memory == "lstm":
         ModelCatalog.register_custom_model("custom_lstm", CustomLSTMModel)
-        model_dict.update(
-            {
-                "custom_model": "custom_lstm",
-                "custom_model_config": {
-                    "hidden_dim": 256,
-                    "num_layers": 1,
-                },
-            }
-        )
+        model_dict = {
+            "custom_model": "custom_lstm",
+        }
+
     elif memory == "attention":
         ModelCatalog.register_custom_model("custom_gtrxl", CustomGTrXLModel)
 
-        model_dict.update(
-            {
-                "custom_model": "custom_gtrxl",
-                "use_attention": True,
-                "custom_model_config": {
-                    "hidden_dim": 128,
-                    "num_heads": 4,
-                },
-            }
-        )
+        model_dict = {
+            "custom_model": "custom_gtrxl",
+        }
 
     config = (
         PPOConfig()
@@ -232,7 +229,6 @@ def run_train(
     temp_env.close()
     config["seed"] = seed
     algo = config.build()
-
     # 6. Training Loop
     training_iters = max(max_timesteps // steps_per_iter, 1)
 

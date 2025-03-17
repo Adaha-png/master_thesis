@@ -5,6 +5,7 @@ import pickle
 from functools import partial
 
 import numpy as np
+import pandas
 import ray
 import torch
 from captum.attr import IntegratedGradients
@@ -258,7 +259,7 @@ def compute(
                     net,
                     memory,
                     agent,
-                    amount_cycles=10,
+                    amount_cycles=10000,
                     steps_per_cycle=100,
                     test=True,
                     seed=483927,
@@ -404,6 +405,11 @@ def crit_compare(agent, memory, feature_names, act_dict):
             for k, out in enumerate(outs):
                 table[i, j, k] = out
 
-    print(table)
-    with open("table_data_crit.pkl", "wb") as f:
+    with open(f".{env_name}/{memory}/{agent}/table_data_crit.pkl", "wb") as f:
         pickle.dump(table, f)
+
+    table = np.array(table)
+    df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
+    print(df.to_latex())
+
+    return table

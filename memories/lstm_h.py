@@ -6,91 +6,99 @@ from ray.rllib.utils.annotations import override
 
 
 class CustomLSTMModel(TorchModelV2, nn.Module):
-    """
-    Custom LSTM model for RLlib that returns the hidden (and cell) states
-    as part of the extra action outputs.
-    """
-
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         TorchModelV2.__init__(
             self, obs_space, action_space, num_outputs, model_config, name
         )
         nn.Module.__init__(self)
 
-        custom_config = model_config.get("custom_model_config", {})
-        self.hidden_dim = custom_config.get("hidden_dim", 256)
-        self.num_layers = custom_config.get("num_layers", 1)
-
-        # Assume the observation is a flat vector.
+        # Flatten the observation.
         input_size = int(np.prod(obs_space.shape))
-        self.fc_in = nn.Linear(input_size, self.hidden_dim)
 
-        # Create an LSTM layer.
-        # Note: RLlib expects recurrent state tensors to be of shape [B, hidden_dim].
-        # LSTM, however, uses shape [num_layers, B, hidden_dim], so we perform
-        # the appropriate reshaping.
+        # Two hidden fully connected layers of size 64.
+        self.fc1 = nn.Linear(input_size, 64)
+        self.fc2 = nn.Linear(64, 64)
+
+        # LSTM layer with input and hidden size = 64.
         self.lstm = nn.LSTM(
-            input_size=self.hidden_dim,
-            hidden_size=self.hidden_dim,
-            num_layers=self.num_layers,
-            batch_first=True,
+            input_size=64, hidden_size=64, num_layers=1, batch_first=True
         )
 
-        # Final output layer.
-        self.fc_out = nn.Linear(self.hidden_dim, num_outputs)
+        # Output layers for policy logits and value function.
+        self.fc_out = nn.Linear(64, num_outputs)
+        self.value_branch = nn.Linear(64, 1)
 
-        # Store the most recent LSTM hidden states for external access.
+        self.layers = [self.fc1, self.fc2, self.lstm, self.fc_out]
+        # Placeholders for storing the last value output and LSTM hidden state.
+        self._value_out = None
         self._last_hidden = None
 
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
-        # Process observations.
+        # Get and flatten observations.
         x = input_dict["obs"]
         if len(x.shape) > 2:
             x = x.view(x.shape[0], -1)
-        x = self.fc_in(x)
 
-        # Add a time dimension if missing (assuming a single time step).
+        # Two hidden layers with ReLU activation.
+        x = torch.tanh(self.fc1(x))
+        x = torch.tanh(self.fc2(x))
+
+        # Add a time dimension if missing (expected shape: [B, T, features]).
         if len(x.shape) == 2:
-            x = x.unsqueeze(1)  # Now shape: [B, 1, hidden_dim]
+            x = x.unsqueeze(1)  # becomes [B, 1, 64]
 
-        B = x.shape[0]
-        # Prepare initial LSTM states.
-        # RLlib passes in state as a list of two tensors, each of shape [B, hidden_dim].
-        # LSTM requires states of shape [num_layers, B, hidden_dim].
+        B = x.size(0)  # current batch size
+
+        # Prepare LSTM state.
         if len(state) == 0:
-            h = torch.zeros(self.num_layers, B, self.hidden_dim, device=x.device)
-            c = torch.zeros(self.num_layers, B, self.hidden_dim, device=x.device)
+            # If no state provided, initialize with zeros.
+            h = torch.zeros(1, B, 64, device=x.device)
+            c = torch.zeros(1, B, 64, device=x.device)
         else:
-            h = state[0].unsqueeze(0)  # Convert [B, hidden_dim] -> [1, B, hidden_dim]
-            c = state[1].unsqueeze(0)
+            h, c = state[0], state[1]
+            # If state is 2D, unsqueeze to make it 3D.
+            if h.ndim == 2:
+                if h.shape[0] != B:
+                    # Tile the state if its batch size is smaller than input batch.
+                    tile_factor = B // h.shape[0]
+                    h = h.repeat(tile_factor, 1)
+                    c = c.repeat(tile_factor, 1)
+                h = h.unsqueeze(0)  # becomes [1, B, 64]
+                c = c.unsqueeze(0)
+            # Otherwise, assume state is already 3D.
+            else:
+                if h.shape[1] != B:
+                    tile_factor = B // h.shape[1]
+                    h = h.repeat(1, tile_factor, 1)
+                    c = c.repeat(1, tile_factor, 1)
 
-        # Run the LSTM.
+        # Pass through the LSTM.
         lstm_out, (h_n, c_n) = self.lstm(x, (h, c))
+        last_out = lstm_out[:, -1, :]  # take output from the last timestep
+        self.h_n = h_n
+        self.c_n = c_n
+        # Prepare new state for next step (back to 2D: [B, hidden_size]).
+        new_state = [h_n.squeeze(0), c_n.squeeze(0)]
+        self._last_hidden = new_state
 
-        # Save hidden states for external access.
-        self._last_hidden = (h_n, c_n)
+        # Compute policy logits and value function.
+        logits = self.fc_out(last_out)
+        self._value_out = self.value_branch(last_out)
 
-        # Update state for the next forward pass (squeeze out the num_layers dimension).
-        next_state = [h_n.squeeze(0), c_n.squeeze(0)]
-
-        # Use the output from the last time step.
-        last_output = lstm_out[:, -1, :]
-        output = self.fc_out(last_output)
-        return output, next_state
+        return logits, new_state
 
     @override(TorchModelV2)
     def get_initial_state(self):
-        # RLlib expects initial state to be a list of tensors.
-        # Here, we initialize both the hidden and cell states as zeros for a batch size of 1.
-        return [torch.zeros(self.hidden_dim), torch.zeros(self.hidden_dim)]
+        # Return a "single-sample" state; RLlib will tile it.
+        return [torch.zeros(64), torch.zeros(64)]
+
+    @override(TorchModelV2)
+    def value_function(self):
+        if self._value_out is None:
+            raise ValueError("value_function() called before forward()")
+        return self._value_out.squeeze(1)
 
     def get_extra_action_out(self):
-        extra_out = {}
-        if self._last_hidden is not None:
-            # Return both hidden (h) and cell (c) states.
-            extra_out["lstm_hidden"] = {
-                "h": self._last_hidden[0].detach(),
-                "c": self._last_hidden[1].detach(),
-            }
-        return extra_out
+        # Expose the latest LSTM hidden state.
+        return {"lstm_hidden": self._last_hidden}

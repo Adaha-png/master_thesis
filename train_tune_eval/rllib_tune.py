@@ -31,7 +31,7 @@ def optim(tuner, trials, jobs, memory="no_memory"):
     return study
 
 
-def tuner(trial, max_timesteps=100_000):
+def tuner(trial, max_timesteps=100_000, memory="no_memory"):
     gamma = trial.suggest_float("gamma", 0.8, 0.999)
     lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
 
@@ -41,6 +41,7 @@ def tuner(trial, max_timesteps=100_000):
         lr=lr,
         gamma=gamma,
         tuning=True,
+        memory=memory,
     )
     return run_inference(algo, num_episodes=300)
 

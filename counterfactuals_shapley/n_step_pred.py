@@ -69,8 +69,9 @@ def add_shap(
     num_acts = env.action_space(agent + "_0").n
     env.close()
 
-    X = torch.Tensor(X).cpu()
-
+    X = torch.Tensor(X).to(device)
+    net = net.to(device)
+    baseline = baseline.to(device)
     with torch.no_grad():
         shap = KernelShap(net)
         new_X = [
@@ -106,19 +107,28 @@ def add_ig(
     env = env_creator()
     num_acts = env.action_space(agent + "_0").n
     env.close()
+    X = torch.Tensor(X).to("cpu")
     if extras == "one-hot":
         new_X = [
             numpyfy(
                 [
-                    *obs.cpu(),
-                    *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0].cpu(),
+                    *obs,
+                    *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0],
                 ]
             )
             for obs in tqdm(X, desc="Adding ig")
         ]
     elif extras == "action":
         new_X = [
-            numpyfy([*obs.cpu(), *ig(obs[:-1], target=int(obs[-1]))[0].cpu()])
+            numpyfy(
+                [
+                    *obs,
+                    *ig(
+                        obs[:-1],
+                        target=obs[-1].to(dtype=torch.int),
+                    )[0],
+                ]
+            )
             for obs in tqdm(X, desc="Adding ig")
         ]
     else:
@@ -126,7 +136,7 @@ def add_ig(
             new_X = [
                 numpyfy(
                     [
-                        *obs.cpu(),
+                        *obs,
                         *ig(
                             obs,
                             target=torch.argmax(net(obs)),
@@ -236,7 +246,7 @@ def get_future_data(
     net,
     memory,
     agent,
-    amount_cycles=100000,
+    amount_cycles=10000,
     steps_per_cycle=100,
     test=False,
     seed=0,
@@ -254,7 +264,7 @@ def get_future_data(
     if test:
         training_packs = 1
     else:
-        training_packs = np.ceil(10 / n_agents)
+        training_packs = int(np.ceil(10 / n_agents))
 
     paths = []
     with torch.no_grad():
@@ -268,10 +278,7 @@ def get_future_data(
 
             sim_part = partial(sim_steps, net, steps_per_cycle, memory)
 
-            seed_values = [
-                seed + i * (amount_cycles // training_packs) + j
-                for j in range(amount_cycles // training_packs)
-            ]
+            seed_values = [seed + i * (amount_cycles) + j for j in range(amount_cycles)]
 
             results = [sim_part(seed_value) for seed_value in tqdm(seed_values)]
             paths.append(path)

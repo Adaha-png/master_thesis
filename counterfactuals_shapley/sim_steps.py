@@ -75,14 +75,36 @@ def sim_steps(net, num_steps, memory, seed):
     observations, _ = env.reset(seed)
 
     history = []
+    if not memory == "no_memory":
+        obs = iter(observations.values())
+        vals = net[1](net[0](obs))
+        if len(vals.shape) == 2:
+            vals = vals.unsqueeze(1)  # becomes [B, 1, 64]
+
+        B = vals.size(0)  # current batch size
+
+        mem = {}
+        mem["def"] = (
+            torch.zeros(1, B, 64, device=vals.device),
+            torch.zeros(1, B, 64, device=vals.device),
+        )
 
     done = {agent: False for agent in env.agents}
     i = 0
     while not all(done.values()) and i < num_steps:
         actions = {}
         for agent, obs in observations.items():
-            vals = net.forward(torch.Tensor(obs))
-            actions[agent] = int(np.argmax(vals))
+            if memory == "no_memory":
+                vals = net.forward(torch.Tensor(obs))
+                actions[agent] = int(np.argmax(vals))
+            else:
+                vals = torch.tanh(net[1](torch.tanh(net[0](obs))))
+                vals, _mem = net[2](vals, mem.get(agent, mem["def"]))
+                vals = net[3](vals)
+                mem[agent] = _mem
+
+                actions[agent] = int(np.argmax(vals))
+
         observations_next, rewards, done, _, _ = env.step(actions)
 
         step_record = {}
@@ -93,7 +115,7 @@ def sim_steps(net, num_steps, memory, seed):
                 "reward": rewards.get(agent),
             }
             if memory != "no_memory":
-                step_record[agent]["memory"] = net.get_extra_action_out()
+                step_record[agent]["memory"] = mem[agent]
 
         history.append(step_record)
 
@@ -103,76 +125,3 @@ def sim_steps(net, num_steps, memory, seed):
     env.close()
 
     return history
-
-
-if __name__ == "__main__":
-    seed = 42
-    # Superseeding, might be unnecessary
-    np.random.seed(seed)
-    random.seed(seed)
-
-    parser = argparse.ArgumentParser(description="Simulation")
-    parser.add_argument(
-        "-e",
-        "--env",
-        type=str,
-        help="Which environment to use",
-        default="spread",
-    )
-    parser.add_argument(
-        "-s",
-        "--steps",
-        type=int,
-        help="Steps to simulate",
-        default=10,
-    )
-    parser.add_argument(
-        "-r",
-        "--render",
-        type=str,
-        help="Render mode, default None",
-        default=None,
-    )
-
-    args = parser.parse_args()
-    if args.env == "spread":
-        env_fn = simple_spread_v3
-
-        env_kwargs = dict(
-            N=3,
-            local_ratio=0.5,
-            max_cycles=25,
-            continuous_actions=False,
-        )
-    elif args.env == "kaz":
-        env_fn = knights_archers_zombies_v10
-
-        env_kwargs = dict(
-            spawn_rate=6,
-            num_archers=2,
-            num_knights=2,
-            max_zombies=10,
-            max_arrows=10,
-            max_cycles=900,
-            vector_state=True,
-        )
-    else:
-        print("Invalid env entered")
-        exit(0)
-
-    env = env_fn.parallel_env(render_mode=args.render, **env_kwargs)
-
-    env = par_env_with_seed(env, seed)
-
-    try:
-        latest_policy = max(
-            glob.glob(f".{str(env.metadata['name'])}/*.zip"),
-            key=os.path.getctime,
-        )
-        print(latest_policy)
-    except ValueError:
-        print("Policy not found.")
-        exit(0)
-
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(sim_steps(env, latest_policy, num_steps=args.steps, seed=1))

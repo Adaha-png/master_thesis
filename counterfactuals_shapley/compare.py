@@ -6,6 +6,7 @@ import pickle
 from functools import partial
 
 import numpy as np
+import pandas
 import ray
 import torch
 from captum.attr import IntegratedGradients
@@ -144,11 +145,13 @@ def compute(
     if not os.path.exists(f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz"):
         print("Prediction data not found, creating...")
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
-        if len(paths) < 5:
+        n_agents = len([ag for ag in env.possible_agents if agent in ag])
+        if len(paths) < int(np.ceil(10 / n_agents)):
             paths = get_future_data(net, memory, agent, seed=921, finished=paths)
 
         X = []
         y = []
+        print(paths)
         for path in paths:
             with lzma.open(path, "rb") as f:
                 seq = pickle.load(f)
@@ -159,6 +162,7 @@ def compute(
 
         X = torch.Tensor(np.array(X))
         y = torch.Tensor(np.array(y))
+        os.makedirs(f".{env_name}/{memory}/{agent}/pred_data", exist_ok=True)
         with lzma.open(
             f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "wb"
         ) as f:
@@ -192,7 +196,7 @@ def compute(
         if not os.path.exists(
             f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz"
         ):
-            ig = IntegratedGradients(net)
+            ig = IntegratedGradients(net.cpu())
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
                 baseline = create_baseline(X)
                 torch.save(
@@ -205,7 +209,8 @@ def compute(
                     weights_only=True,
                 )
 
-            baseline = baseline.to(torch.float32)
+            baseline = baseline.to(dtype=torch.float32, device="cpu")
+            X = torch.Tensor(X).cpu()
             ig_partial = partial(
                 ig.attribute,
                 baselines=baseline,
@@ -213,7 +218,7 @@ def compute(
                 return_convergence_delta=False,
             )
             X = add_ig(
-                net,
+                net.cpu(),
                 agent,
                 memory,
                 X,
@@ -236,7 +241,7 @@ def compute(
                 f".{env_name}/{memory}/{agent}/pred_data/prediction_data_*_shap.xz"
             )
             if len(paths) > 0:
-                path = paths[0]
+                path = paths[1]
                 with lzma.open(path, "rb") as f:
                     Obs_with_shap = pickle.load(f)
                     Obs_with_shap = numpyfy(Obs_with_shap)
@@ -270,7 +275,7 @@ def compute(
                     net,
                     agent,
                     memory,
-                    X,
+                    torch.Tensor(X),
                     baseline,
                     device,
                     extras=extras,
@@ -336,6 +341,7 @@ def compute(
                 get_future_data(
                     net,
                     memory,
+                    agent,
                     amount_cycles=10000,
                     steps_per_cycle=100,
                     test=True,
@@ -348,7 +354,7 @@ def compute(
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
-                X_test, y_test = extract_pairs_from_histories(seq, agent, 10)
+                X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10)
 
                 os.makedirs(
                     f".{env_name}/{memory}/{agent}/pred_data",
@@ -373,7 +379,7 @@ def compute(
                     X_test = one_hot_action(X_test)
 
             if explainer_extras == "ig":
-                ig = IntegratedGradients(net)
+                ig = IntegratedGradients(net.cpu())
                 if not os.path.exists(
                     f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 ):
@@ -387,15 +393,17 @@ def compute(
                         map_location=device,
                         weights_only=True,
                     )
+
+                baseline = baseline.cpu()
                 ig_partial = partial(
                     ig.attribute,
                     baselines=baseline,
                     method="gausslegendre",
                     return_convergence_delta=False,
                 )
-
+                X_test = torch.Tensor(X_test).cpu()
                 X_test = add_ig(
-                    net,
+                    net.cpu(),
                     agent,
                     memory,
                     X_test,
@@ -470,7 +478,8 @@ def compute(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
-    if len(plot_paths) != len(y[0]):
+    if len(plot_paths) < len(y[0]):
+        print(f"{X_test.shape=}")
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
         indices = torch.randperm(len(X_test))[:50]
         make_plots(
@@ -566,8 +575,11 @@ def run_compare(agent, memory, feature_names, act_dict, device):
             for k, out in enumerate(outs):
                 table[i, j, k] = out
 
-    print(table)
-    with open("table_data.pkl", "wb") as f:
+    with open(f".{env_name}/{memory}/{agent}/table_data.pkl", "wb") as f:
         pickle.dump(table, f)
+
+    table = np.array(table)
+    df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
+    print(df.to_latex())
 
     return table

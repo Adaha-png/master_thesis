@@ -22,17 +22,22 @@ load_dotenv()
 
 
 def train_new_policy(should_tune, timesteps, memory="no_memory"):
+    print(memory)
     if should_tune:
         if os.path.exists(f".{env.metadata['name']}/{memory}/tuning.db"):
-            remove = "y"
-            remove = input(
-                "Tuning db for this environment already exists, do you want to delete it and start over? [y/N]:"
-            )
+            # remove = input(
+            #     "Tuning db for this environment already exists, do you want to delete it and start over? [y/N]: "
+            # )
+            remove = "N"
             if remove == "y":
                 os.remove(f".{env.metadata['name']}/{memory}/tuning.db")
 
-        tuner = partial(tune.tuner, max_timesteps=int(os.environ["TUNING_STEPS"]))
-        study = tune.optim(tuner, os.environ["TRIALS"], os.environ["JOBS"])
+        tuner = partial(
+            tune.tuner, max_timesteps=int(os.environ["TUNING_STEPS"]), memory=memory
+        )
+        study = tune.optim(
+            tuner, os.environ["TRIALS"], os.environ["JOBS"], memory=memory
+        )
     else:
         study = optuna.load_study(
             study_name=f".{env.metadata['name']}/{memory}/tuning.db",
@@ -72,7 +77,7 @@ def get_policy(
             policy_path = f".{str(env.metadata['name'])}/{memory}/{os.environ['RL_TRAINING_PATH']}"
 
     if not policy_path:
-        policy_path = train_new_policy(should_tune, timesteps)
+        policy_path = train_new_policy(should_tune, timesteps, memory=memory)
 
     return policy_path
 
@@ -85,7 +90,6 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
     env = env_creator()
     memory = "no_memory"
     policy_path = get_policy(
@@ -94,13 +98,12 @@ if __name__ == "__main__":
 
     agent = env.possible_agents[0].split("_")[0]
 
+    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
     crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
 
-    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
-
-    for memory in ["lstm", "attention"]:
+    for memry in ["lstm", "attention"]:
         policy_path = get_policy(
-            should_tune=True, new_policy=True, timesteps=2000000, memory=memory
+            should_tune=True, new_policy=True, timesteps=2000000, memory=memry
         )
         ray.init(ignore_reinit_error=True)
         env_name = env_creator().metadata["name"]
@@ -108,11 +111,11 @@ if __name__ == "__main__":
         register_env(
             env_name, lambda config: ParallelPettingZooEnv(env_creator(config))
         )
-        policy_path = "file://" + os.path.abspath(f".{env_name}/{memory}/policies")
+        policy_path = "file://" + os.path.abspath(f".{env_name}/{memry}/policies")
 
         algo = PPO.from_checkpoint(policy_path)
 
-        net = get_torch_from_algo(algo, agent, memory)
+        net = get_torch_from_algo(algo, agent, memry)
 
         ray.shutdown()
 
@@ -122,8 +125,8 @@ if __name__ == "__main__":
             env.feature_names,
             env.act_dict,
             extras="one-hot",
-            explainer_extras="shapley",
-            memory=memory,
+            explainer_extras="shap",
+            memory=memry,
             device=device,
         )
         compare.compute(
@@ -133,5 +136,5 @@ if __name__ == "__main__":
             env.act_dict,
             extras="one-hot",
             explainer_extras="shap",
-            memory=memory,
+            memory=memry,
         )
