@@ -7,6 +7,6 @@ tex/main.aux
 tex/main.out
 tex/main.log
 tex/main.toc
-.knights_archers_zombies_v10/*/prediction_data_part*
-.knights_archers_zombies_v10/*/prediction_test_data.xz
-.knights_archers_zombies_v10/*/tempdir
+.*/*/prediction_data_part*
+.*/*/prediction_test_data.xz
+.*/*/tempdir

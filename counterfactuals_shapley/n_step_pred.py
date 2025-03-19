@@ -34,7 +34,7 @@ def get_new_obs(obs, extras, net, shap, num_acts, baseline):
         action_idx = obs[-1].item()
         shap_obs = obs[:-1]
     else:
-        action_idx = int(np.argmax(net.forward(obs)))
+        action_idx = int(torch.argmax(net.forward(obs)))
         shap_obs = obs[:]
 
     if shap_obs.ndim == 1:
@@ -75,7 +75,8 @@ def add_shap(
     with torch.no_grad():
         shap = KernelShap(net)
         new_X = [
-            get_new_obs(obs, extras, net, shap, num_acts, baseline) for obs in tqdm(X)
+            get_new_obs(obs, extras, net, shap, num_acts, baseline).cpu()
+            for obs in tqdm(X)
         ]
 
     new_X = numpyfy(new_X)
@@ -166,14 +167,15 @@ def pred(net, n, device, X):
     return net(X).cpu().detach().numpy()[:, n]
 
 
-def add_action(X, net, agent, memory, name_ider="pred_data", save=True):
-    X = torch.Tensor(X)
+def add_action(X, net, agent, memory, device, name_ider="pred_data", save=True):
+    X = torch.Tensor(X).to(device)
+    net = net.to(device)
     with torch.no_grad():
         new_X = [
             numpyfy(
                 [
-                    *obs,
-                    np.argmax(net.forward(obs)),
+                    *obs.cpu(),
+                    torch.argmax(net.forward(obs)).cpu().item(),
                 ]
             )
             for obs in X

@@ -133,7 +133,7 @@ def compute(
         if not os.path.exists(
             f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.xz"
         ):
-            add_action(X, net, agent, memory, name_ider="crit")
+            add_action(X, net, agent, memory, device, name_ider="crit")
 
             with lzma.open(
                 f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data_action.xz",
@@ -299,7 +299,7 @@ def compute(
 
             if not extras == "none":
                 X_test = add_action(
-                    X_test, net, agent, memory, name_ider="crit", save=False
+                    X_test, net, agent, memory, device, name_ider="crit", save=False
                 )
                 if extras == "one-hot":
                     X_test = one_hot_action(X_test)
@@ -405,11 +405,10 @@ def crit_compare(agent, memory, feature_names, act_dict):
             for k, out in enumerate(outs):
                 table[i, j, k] = out
 
-    with open(f".{env_name}/{memory}/{agent}/table_data_crit.pkl", "wb") as f:
-        pickle.dump(table, f)
-
     table = np.array(table)
     df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
-    print(df.to_latex())
+
+    with open(f".{env_name}/{memory}/{agent}/table_data_crit.txt", "w") as f:
+        f.write(df.to_latex())
 
     return table
