@@ -1,4 +1,3 @@
-import glob
 import multiprocessing
 import os
 import random
@@ -17,7 +16,6 @@ from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
-from torch import nn
 
 from memories.gtrxl import CustomGTrXLModel
 from memories.lstm_h import CustomLSTMModel
@@ -61,7 +59,7 @@ def simple_spread_env(config):
         + comms_feature_names
     )
     full_feature_names = []
-    frames = 4
+    frames = 1
     for i in range(frames):
         for name in feature_names:
             full_feature_names.append(f"{name}, {i}")
@@ -75,7 +73,7 @@ def simple_spread_env(config):
     }
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
-    env = ss.frame_stack_v2(env, stack_size=frames)
+    # env = ss.frame_stack_v2(env, stack_size=frames)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
@@ -157,7 +155,7 @@ def run_train(
     tuning=False,
     memory="no_memory",
 ):
-    ray.init()
+    ray.init(ignore_reinit_error=True)
 
     temp_env = env_creator()
     temp_env.reset()
@@ -168,7 +166,7 @@ def run_train(
     )
 
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
-    steps_per_iter = 20000
+    steps_per_iter = 40000
 
     if memory == "no_memory":
         model_dict = {
@@ -202,7 +200,7 @@ def run_train(
         .training(
             model=model_dict,
             train_batch_size=steps_per_iter,
-            minibatch_size=512,
+            minibatch_size=1024,
             lr=lr,
             gamma=gamma,
             shuffle_batch_per_epoch=True,
@@ -312,6 +310,7 @@ def record_episode(memory="no_memory"):
     done = {agent: False for agent in env.agents}  # Track if each agent is done
     while not all(done.values()):
         actions = {}
+        frames.append(env.render())
         # Gather actions for each agent from the loaded policy
         for agent, obs in observations.items():
             action, _, info = algo.compute_single_action(
@@ -325,7 +324,7 @@ def record_episode(memory="no_memory"):
     # 5) Close the environment
     env.close()
 
-    video_filename = f".{env_name}/episode.mp4"
+    video_filename = f".{env_name}/{memory}/episode.mp4"
     imageio.mimsave(video_filename, frames, fps=10)
     print(f"Video saved to {video_filename}")
 
@@ -341,19 +340,4 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    # env = env_creator()
-    # study = optuna.load_study(
-    #     study_name=f".{env.metadata['name']}/tuning.db",
-    #     storage=f"sqlite:///.{env.metadata['name']}/{os.environ['RL_TUNING_PATH']}/tuning.db",
-    # )
-    #
-    # trial = study.best_trial
-    # env.close()
-    #
-    # gamma = trial.suggest_float("gamma", 0.8, 0.999)
-    # lr = trial.suggest_float("lr", 1e-5, 1, log=True)
-
-    lr = 4.1592643658050244e-05
-    gamma = 0.9983387308814202
-    run_train(gamma=gamma, lr=lr, max_timesteps=10_000_000, seed=seed)
-    record_episode()
+    record_episode(memory="no_memory")

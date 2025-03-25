@@ -156,7 +156,7 @@ def compute(
             with lzma.open(path, "rb") as f:
                 seq = pickle.load(f)
 
-            partX, party = extract_pairs_from_histories(seq, agent, memory, 10)
+            partX, party = extract_pairs_from_histories(seq, agent, memory, 10, n=0)
             X.extend(partX)
             y.extend(party)
 
@@ -177,7 +177,7 @@ def compute(
         if not os.path.exists(
             f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz"
         ):
-            add_action(X, net, agent, memory)
+            add_action(X, net, agent, memory, device)
             with lzma.open(
                 f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz",
                 "rb",
@@ -241,7 +241,7 @@ def compute(
                 f".{env_name}/{memory}/{agent}/pred_data/prediction_data_*_shap.xz"
             )
             if len(paths) > 0:
-                path = paths[1]
+                path = paths[0]
                 with lzma.open(path, "rb") as f:
                     Obs_with_shap = pickle.load(f)
                     Obs_with_shap = numpyfy(Obs_with_shap)
@@ -354,7 +354,7 @@ def compute(
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
-                X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10)
+                X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10, 0)
 
                 os.makedirs(
                     f".{env_name}/{memory}/{agent}/pred_data",
@@ -374,7 +374,7 @@ def compute(
                     X_test, y_test = pickle.load(f)
 
             if not extras == "none":
-                X_test = add_action(X_test, net, agent, memory, save=False)
+                X_test = add_action(X_test, net, agent, memory, device, save=False)
                 if extras == "one-hot":
                     X_test = one_hot_action(X_test)
 
@@ -448,7 +448,7 @@ def compute(
                         net,
                         agent,
                         memory,
-                        X_test,
+                        torch.Tensor(X_test),
                         baseline,
                         device,
                         extras=extras,
@@ -542,8 +542,8 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
 
 
 def run_compare(agent, memory, feature_names, act_dict, device):
-    extras = ["action", "one-hot", "none"]
-    explainer_extras = ["none", "ig", "shap"]
+    extras = ["none", "one-hot", "action"]
+    explainer_extras = ["shap", "ig", "none"]
 
     table = np.zeros((3, len(extras), len(explainer_extras)))
 
@@ -575,11 +575,10 @@ def run_compare(agent, memory, feature_names, act_dict, device):
             for k, out in enumerate(outs):
                 table[i, j, k] = out
 
-    with open(f".{env_name}/{memory}/{agent}/table_data.pkl", "wb") as f:
-        pickle.dump(table, f)
-
     table = np.array(table)
     df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
-    print(df.to_latex())
+
+    with open(f".{env_name}/{memory}/{agent}/table_data.txt", "w") as f:
+        f.write(df.to_latex())
 
     return table

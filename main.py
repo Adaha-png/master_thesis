@@ -48,6 +48,7 @@ def train_new_policy(should_tune, timesteps, memory="no_memory"):
     gamma = trial.suggest_float("gamma", 0.8, 0.999)
     lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
 
+    lr = 3e-5
     print(f"Using learning rate: {lr:.3e}, discount factor: {gamma:.3f}")
 
     _, policy_path = rllib_train.run_train(
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     env = env_creator()
     memory = "no_memory"
     policy_path = get_policy(
-        should_tune=False, new_policy=False, timesteps=2000000, memory=memory
+        should_tune=False, new_policy=False, timesteps=20000000, memory=memory
     )
 
     agent = env.possible_agents[0].split("_")[0]
