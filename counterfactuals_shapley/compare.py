@@ -569,7 +569,9 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
 
     env = env_creator()
     feature_names = copy.deepcopy(env.feature_names)
-    slices = [len(feature_names)]
+
+    slices = [0, len(feature_names)]
+
     if memory == "lstm":
         feature_names.extend([f"h {i}" for i in range(64)])
         slices.append(len(feature_names))
