@@ -22,23 +22,21 @@ from .wrappers import numpyfy
 load_dotenv()
 
 
-def get_new_obs(obs, extras, net, shap, num_acts, baseline):
-    """
-    Computes SHAP values for a single observation and returns
-    the concatenation of the original observation and its SHAP values.
-    """
+def get_new_obs(obs, extras, net, shap, num_acts, n_feats, baseline, memory):
+    shap_obs = obs[:n_feats]
+    print(obs)
+    shap_obs = shap_obs.unsqueeze(0)
+
     if extras == "one-hot":
         action_idx = torch.argmax(obs[-num_acts:]).item()
-        shap_obs = obs[:-num_acts]
     elif extras == "action":
         action_idx = obs[-1].item()
-        shap_obs = obs[:-1]
     else:
-        action_idx = int(torch.argmax(net.forward(obs)))
-        shap_obs = obs[:]
+        if memory == "lstm":
+            net.set_hidden(obs[n_feats:])
 
-    if shap_obs.ndim == 1:
-        shap_obs = shap_obs.unsqueeze(0)
+        action_idx = int(torch.argmax(net(shap_obs)))
+
     action_idx = int(action_idx)
 
     shap_values = shap.attribute(
@@ -67,6 +65,7 @@ def add_shap(
 
     env = env_creator()
     num_acts = env.action_space(agent + "_0").n
+    n_feats = len(env.feature_names)
     env.close()
 
     X = torch.Tensor(X).to(device)
@@ -75,7 +74,9 @@ def add_shap(
     with torch.no_grad():
         shap = KernelShap(net)
         new_X = [
-            get_new_obs(obs, extras, net, shap, num_acts, baseline).cpu()
+            get_new_obs(
+                obs, extras, net, shap, num_acts, n_feats, baseline, memory
+            ).cpu()
             for obs in tqdm(X)
         ]
 
@@ -106,46 +107,23 @@ def add_ig(
         X = torch.Tensor(X).to(device=device, dtype=torch.float32)
 
     env = env_creator()
-    num_acts = env.action_space(agent + "_0").n
+    n_feats = len(env.feature_names)
     env.close()
-    X = torch.Tensor(X).to("cpu")
-    if extras == "one-hot":
-        new_X = [
-            numpyfy(
-                [
-                    *obs,
-                    *ig(obs[:-num_acts], target=torch.argmax(obs[-num_acts:]))[0],
-                ]
-            )
-            for obs in tqdm(X, desc="Adding ig")
-        ]
-    elif extras == "action":
+
+    with torch.no_grad():
         new_X = [
             numpyfy(
                 [
                     *obs,
                     *ig(
-                        obs[:-1],
-                        target=obs[-1].to(dtype=torch.int),
-                    )[0],
+                        obs[:n_feats],
+                        target=torch.argmax(net.set_hidden(obs)),
+                    ).squeeze(),
                 ]
             )
             for obs in tqdm(X, desc="Adding ig")
         ]
-    else:
-        with torch.no_grad():
-            new_X = [
-                numpyfy(
-                    [
-                        *obs,
-                        *ig(
-                            obs,
-                            target=torch.argmax(net(obs)),
-                        ).squeeze(),
-                    ]
-                )
-                for obs in tqdm(X, desc="Adding ig")
-            ]
+
     if save:
         os.makedirs(
             f".{env.metadata['name']}/{memory}/{agent}/{name_ider}",
@@ -170,16 +148,31 @@ def pred(net, n, device, X):
 def add_action(X, net, agent, memory, device, name_ider="pred_data", save=True):
     X = torch.Tensor(X).to(device)
     net = net.to(device)
+    n_feats = len(env_creator().feature_names)
     with torch.no_grad():
-        new_X = [
-            numpyfy(
-                [
-                    *obs.cpu(),
-                    torch.argmax(net.forward(obs)).cpu().item(),
-                ]
-            )
-            for obs in X
-        ]
+        try:
+            new_X = [
+                numpyfy(
+                    [
+                        *obs.cpu(),
+                        torch.argmax(net(obs.unsqueeze(0))).cpu().item(),
+                    ]
+                )
+                for obs in tqdm(X, desc="Adding action")
+            ]
+        except RuntimeError as e:
+            print(e)
+            exit(0)
+            new_X = [
+                numpyfy(
+                    [
+                        *obs.cpu(),
+                        torch.argmax(net(obs[:-n_feats].unsqueeze(0))).cpu().item(),
+                    ]
+                )
+                for obs in tqdm(X, desc="Adding action")
+            ]
+
         if save:
             env = env_creator()
             os.makedirs(
@@ -207,7 +200,7 @@ def future_sight(
     net,
     X,
     y,
-    epochs=200,
+    epochs=300,
     extras="none",
     explainer_extras="none",
     criterion=None,
@@ -248,6 +241,7 @@ def get_future_data(
     net,
     memory,
     agent,
+    device,
     amount_cycles=10000,
     steps_per_cycle=100,
     test=False,
@@ -278,7 +272,7 @@ def get_future_data(
             if path in finished:
                 continue
 
-            sim_part = partial(sim_steps, net, steps_per_cycle, memory)
+            sim_part = partial(sim_steps, net, steps_per_cycle, memory, device)
 
             seed_values = [seed + i * (amount_cycles) + j for j in range(amount_cycles)]
 
@@ -330,7 +324,7 @@ def train_net(
 
     optimizer = torch.optim.AdamW(net.parameters(), lr=0.0001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=5, threshold=0.00001
+        optimizer, factor=0.3, min_lr=1e-6
     )
 
     # Training loop
@@ -338,6 +332,7 @@ def train_net(
     print(f"lr = {last_lr}")
     net.train()
     eval_loss = []
+
     for epoch in range(epochs):
         total_loss = 0
         permutation = torch.randperm(X_train.size()[0])

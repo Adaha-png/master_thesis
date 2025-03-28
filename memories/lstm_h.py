@@ -7,10 +7,7 @@ from ray.rllib.utils.annotations import override
 
 class CustomLSTMModel(TorchModelV2, nn.Module):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
-        TorchModelV2.__init__(
-            self, obs_space, action_space, num_outputs, model_config, name
-        )
-        nn.Module.__init__(self)
+        super().__init__(obs_space, action_space, num_outputs, model_config, name)
 
         # Flatten the observation.
         input_size = int(np.prod(obs_space.shape))

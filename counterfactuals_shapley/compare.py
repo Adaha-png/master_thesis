@@ -31,6 +31,43 @@ from .shapley import kernel_explainer, shap_plot
 from .wrappers import numpyfy
 
 
+class OneStepLSTM(nn.Module):
+    def __init__(self, inp_layers, lstm, out_layers, n_feats):
+        super().__init__()
+        self.inp_layers = inp_layers
+        self.lstm = lstm
+        self.out_layers = out_layers
+        self.h_c = None
+        self.n_feats = n_feats
+
+    def forward(self, inp):
+        x = self.inp_layers(inp)
+        x, _ = self.lstm(x, self.h_c)
+        x = self.out_layers(x)
+        return x
+
+    def set_hidden(self, obs_with_mem):
+        inp = obs_with_mem[: self.n_feats].unsqueeze(0)
+        mem = obs_with_mem[self.n_feats :]
+
+        mem_len = int(len(mem) / 2)
+
+        h = torch.Tensor(mem[:mem_len]).unsqueeze(0)
+        c = torch.Tensor(mem[mem_len:]).unsqueeze(0)
+
+        self.h_c = (h, c)
+
+        return self.forward(inp)
+
+
+class ExtractTensor(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x[0]
+
+
 def distance(predicted, y):
     if not isinstance(predicted, np.ndarray):
         predicted = numpyfy(predicted)
@@ -43,14 +80,22 @@ def extract_observations(history, agent_name, memory, n, m):
     obs_n = []
     obs_n_plus_m = []
 
-    # Extract observation at step n
     if 0 <= n < len(history):
         step_record = history[n]
         for agent, data in step_record.items():
             if agent.startswith(agent_name):
-                if memory != "no_memory":
-                    print(f"{data.get('memory')=}")
-                    exit(0)
+                if memory == "lstm":
+                    obs_with_mem = np.array(
+                        [
+                            *data["observation"],
+                            *data["memory"][0].squeeze().cpu().detach(),
+                            *data["memory"][1].squeeze().cpu().detach(),
+                        ]
+                    )
+                    obs_n.append(obs_with_mem)
+
+                elif memory == "attention":
+                    raise NotImplementedError
                 else:
                     obs_n.append(data.get("observation"))
 
@@ -96,27 +141,38 @@ def extract_pairs_from_histories(histories, agent_name, memory, m, n=None):
 
 
 def get_torch_from_algo(algo, agent, memory, logits=False):
-    env = env_creator()
-    path_ider = f".{env.metadata['name']}/{memory}/{agent}/torch/*.pt"
-    torch_path = glob.glob(path_ider)
-    if not torch_path == []:
-        policy_net = torch.load(torch_path[0], weights_only=False)
+    policy_net = algo.get_policy(policy_id=agent).model
+
+    if memory == "no_memory":
+        if logits:
+            net = nn.Sequential(policy_net._hidden_layers, policy_net._logits)
+
+        else:
+            net = nn.Sequential(
+                policy_net._hidden_layers,
+                policy_net._logits,
+                nn.Softmax(dim=0),
+            )
+        return net
+
+    elif memory == "lstm":
+        if logits:
+            return (
+                policy_net._hidden_layers,
+                policy_net.lstm,
+                policy_net._logits_branch,
+            )
+
+        else:
+            return (
+                policy_net._hidden_layers,
+                policy_net.lstm,
+                policy_net._logits_branch,
+                nn.Softmax(dim=0),
+            )
+
     else:
-        algo.get_policy(policy_id=agent).export_model(
-            export_dir="/".join(path_ider.split("/")[:-1])
-        )
-        torch_path = glob.glob(path_ider)
-        policy_net = torch.load(torch_path[0], weights_only=False)
-
-    if logits:
-        net = nn.Sequential(policy_net._hidden_layers, policy_net._logits)
-
-    else:
-        net = nn.Sequential(
-            policy_net._hidden_layers, policy_net._logits, nn.Softmax(dim=0)
-        )
-
-    return net
+        return NotImplementedError
 
 
 def compute(
@@ -147,16 +203,17 @@ def compute(
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         n_agents = len([ag for ag in env.possible_agents if agent in ag])
         if len(paths) < int(np.ceil(10 / n_agents)):
-            paths = get_future_data(net, memory, agent, seed=921, finished=paths)
+            paths = get_future_data(
+                net, memory, agent, device, seed=921, finished=paths
+            )
 
         X = []
         y = []
-        print(paths)
         for path in paths:
             with lzma.open(path, "rb") as f:
                 seq = pickle.load(f)
 
-            partX, party = extract_pairs_from_histories(seq, agent, memory, 10, n=0)
+            partX, party = extract_pairs_from_histories(seq, agent, memory, 10)
             X.extend(partX)
             y.extend(party)
 
@@ -172,6 +229,15 @@ def compute(
             f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
+    n_feats = len(env.feature_names)
+    if memory != "no_memory":
+        out_layers = nn.Sequential(*net[2:])
+        net = OneStepLSTM(
+            inp_layers=net[0],
+            lstm=net[1],
+            out_layers=out_layers,
+            n_feats=n_feats,
+        )
 
     if extras != "none":
         if not os.path.exists(
@@ -198,7 +264,7 @@ def compute(
         ):
             ig = IntegratedGradients(net.cpu())
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
-                baseline = create_baseline(X)
+                baseline = create_baseline(X, n_feats)
                 torch.save(
                     baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 )
@@ -259,7 +325,7 @@ def compute(
                 if not os.path.exists(
                     f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 ):
-                    baseline = create_baseline(X)
+                    baseline = create_baseline(X, n_feats)
                     torch.save(
                         baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                     )
@@ -310,6 +376,7 @@ def compute(
             explainer_extras=explainer_extras,
         )
         pred_net.eval()
+
     else:
         print(
             f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
@@ -342,6 +409,7 @@ def compute(
                     net,
                     memory,
                     agent,
+                    device,
                     amount_cycles=10000,
                     steps_per_cycle=100,
                     test=True,
@@ -354,7 +422,7 @@ def compute(
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
-                X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10, 0)
+                X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10)
 
                 os.makedirs(
                     f".{env_name}/{memory}/{agent}/pred_data",
@@ -383,7 +451,7 @@ def compute(
                 if not os.path.exists(
                     f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 ):
-                    baseline = create_baseline(X_test)
+                    baseline = create_baseline(X_test, n_feats)
                     torch.save(
                         baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                     )
@@ -431,7 +499,7 @@ def compute(
                     if not os.path.exists(
                         f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                     ):
-                        baseline = create_baseline(X)
+                        baseline = create_baseline(X, n_feats)
                         torch.save(
                             baseline,
                             f".{env_name}/{memory}/{agent}/.baseline_future.pt",
@@ -479,7 +547,6 @@ def compute(
     )
 
     if len(plot_paths) < len(y[0]):
-        print(f"{X_test.shape=}")
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
         indices = torch.randperm(len(X_test))[:50]
         make_plots(
@@ -502,11 +569,20 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
 
     env = env_creator()
     feature_names = copy.deepcopy(env.feature_names)
+    slices = [len(feature_names)]
+    if memory == "lstm":
+        feature_names.extend([f"h {i}" for i in range(64)])
+        slices.append(len(feature_names))
+
+        feature_names.extend([f"c {i}" for i in range(64)])
+        slices.append(len(feature_names))
 
     if extras == "action":
         feature_names.append("action")
+        slices.append(len(feature_names))
     elif extras == "one-hot":
         feature_names.extend(env.act_dict.keys())
+        slices.append(len(feature_names))
 
     if explainer_extras != "none":
         feature_names.extend(
@@ -515,6 +591,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
                 for feature_name in env.feature_names
             ]
         )
+        slices.append(len(feature_names))
 
     if isinstance(explainer, list):
         for i, expl in enumerate(explainer):
@@ -527,6 +604,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
                 i,
                 extras,
                 explainer_extras,
+                slices=slices,
             )
     else:
         shap_plot(
@@ -538,14 +616,20 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
             None,
             extras,
             explainer_extras,
+            slices=slices,
         )
 
 
 def run_compare(agent, memory, feature_names, act_dict, device):
-    extras = ["none", "one-hot", "action"]
-    explainer_extras = ["shap", "ig", "none"]
+    extras = ["none", "action", "one-hot"]
+    explainer_extras = ["none", "ig", "shap"]
 
-    table = np.zeros((3, len(extras), len(explainer_extras)))
+    table = np.zeros(
+        (
+            len(extras),
+            len(explainer_extras),
+        )
+    )
 
     ray.init(ignore_reinit_error=True)
     env_name = env_creator().metadata["name"]
@@ -572,11 +656,10 @@ def run_compare(agent, memory, feature_names, act_dict, device):
                 memory=memory,
                 device=device,
             )
-            for k, out in enumerate(outs):
-                table[i, j, k] = out
+            table[i, j] = outs[1]
 
     table = np.array(table)
-    df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
+    df = pandas.DataFrame(data=table, columns=explainer_extras)
 
     with open(f".{env_name}/{memory}/{agent}/table_data.txt", "w") as f:
         f.write(df.to_latex())

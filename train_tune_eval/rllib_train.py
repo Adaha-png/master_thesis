@@ -15,10 +15,11 @@ from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.rllib.models import ModelCatalog
+from ray.rllib.models.torch.recurrent_net import LSTMWrapper as CustomLSTMWrapper
 from ray.tune.registry import register_env
+from torch import nn
 
 from memories.gtrxl import CustomGTrXLModel
-from memories.lstm_h import CustomLSTMModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -71,6 +72,7 @@ def simple_spread_env(config):
         3: "move down",
         4: "move up",
     }
+
     env = simple_spread_v3.parallel_env(**env_kwargs)
     # Add black death wrapper so the number of agents stays constant
     # env = ss.frame_stack_v2(env, stack_size=frames)
@@ -129,6 +131,7 @@ def kaz_env(config):
         4: "move backwards",
         5: "attack",
     }
+
     env = env_fn.parallel_env(**env_kwargs)
 
     # env = ss.frame_stack_v2(env)
@@ -161,8 +164,13 @@ def run_train(
     temp_env.reset()
     env_name = temp_env.metadata["name"]
 
+    if tuning:
+        save_path = f".{env_name}/{memory}/{os.environ['RL_TUNING_PATH']}"
+    else:
+        save_path = f".{env_name}/{memory}/{os.environ['RL_TRAINING_PATH']}"
+
     print(
-        f"Starting training on {env_name} with lr: {lr:.3e} and discount factor: {gamma:.3f}"
+        f"Starting training on {env_name} with lr: {lr} and discount factor: {gamma:.3f}"
     )
 
     register_env(env_name, lambda config: ParallelPettingZooEnv(env_creator(config)))
@@ -175,14 +183,18 @@ def run_train(
         }
 
     elif memory == "lstm":
-        ModelCatalog.register_custom_model("custom_lstm", CustomLSTMModel)
         model_dict = {
-            "custom_model": "custom_lstm",
+            "fcnet_hiddens": [64, 64],
+            "fcnet_activation": "tanh",
+            "use_lstm": True,
+            "lstm_cell_size": 64,
+            "lstm_use_prev_action": False,
+            "lstm_use_prev_reward": False,
+            "max_seq_len": 20,
         }
 
     elif memory == "attention":
         ModelCatalog.register_custom_model("custom_gtrxl", CustomGTrXLModel)
-
         model_dict = {
             "custom_model": "custom_gtrxl",
         }
@@ -229,11 +241,6 @@ def run_train(
     algo = config.build()
     # 6. Training Loop
     training_iters = max(max_timesteps // steps_per_iter, 1)
-
-    if tuning:
-        save_path = f".{env_name}/{memory}/{os.environ['RL_TUNING_PATH']}"
-    else:
-        save_path = f".{env_name}/{memory}/{os.environ['RL_TRAINING_PATH']}"
 
     max_reward_mean = -np.inf
     for i in range(training_iters):
@@ -340,4 +347,4 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    record_episode(memory="no_memory")
+    record_episode(memory="lstm")

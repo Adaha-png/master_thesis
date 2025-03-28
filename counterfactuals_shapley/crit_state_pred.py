@@ -17,7 +17,11 @@ from torch import nn
 from tqdm import tqdm
 
 from counterfactuals_shapley.captum_grads import create_baseline
-from counterfactuals_shapley.compare import get_torch_from_algo, make_plots
+from counterfactuals_shapley.compare import (
+    OneStepLSTM,
+    get_torch_from_algo,
+    make_plots,
+)
 from counterfactuals_shapley.n_step_pred import (
     add_action,
     add_ig,
@@ -26,24 +30,21 @@ from counterfactuals_shapley.n_step_pred import (
     get_future_data,
     one_hot_action,
 )
-from counterfactuals_shapley.shapley import kernel_explainer, pred
+from counterfactuals_shapley.shapley import kernel_explainer
 from counterfactuals_shapley.wrappers import numpyfy
 from train_tune_eval.rllib_train import env_creator
 
 
-def find_crit_state(net, seq, device):
-    pred_func = partial(pred, net, None, device)
-    max_diff = np.max(
-        [np.max(pred_func(step)) - np.min(pred_func(step)) for step in seq]
-    )
+def find_crit_state(seq):
+    max_diff = np.max([step["criticality"] for step in seq])
     return max_diff
 
 
-def get_crit_data(histories, net, agent, device, m):
+def get_crit_data(histories, agent, m):
     histories = np.array(histories)
 
-    X = []  # List of initial observations
-    diff_vals = []  # List of difference values used to classify critical states
+    X = []
+    diff_vals = []
 
     for history in tqdm(histories, desc="getting crit data"):
         if len(history) < m:  # Skip histories that are too short
@@ -51,14 +52,15 @@ def get_crit_data(histories, net, agent, device, m):
 
         n = np.random.randint(0, len(history) - m)
         history = {
-            name: np.array([step[name]["observation"] for step in history])
+            name: np.array([step[name] for step in history])
             for name in history[0]
             if agent in name
         }
 
         for sequence in history.values():
-            X.append(sequence[n])
-            diff = find_crit_state(net, sequence[n : n + m], device)
+            X.append(sequence[n]["observation"])
+            diff = find_crit_state(sequence[n : n + m])
+
             diff_vals.append(diff)
 
     # Convert to numpy arrays
@@ -70,7 +72,6 @@ def get_crit_data(histories, net, agent, device, m):
 
     # Label each initial observation as critical (1) or non-critical (0)
     Y = (diff_vals > threshold).astype(int)
-
     return X, Y
 
 
@@ -99,7 +100,9 @@ def compute(
         n_agents = len([ag for ag in env.possible_agents if agent in ag])
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         if len(paths) < np.ceil(10 / n_agents):
-            paths = get_future_data(net, memory, agent, seed=921, finished=paths)
+            paths = get_future_data(
+                net, memory, agent, device, seed=921, finished=paths
+            )
 
         X = []
         y = []
@@ -108,9 +111,7 @@ def compute(
                 seq = pickle.load(f)
             partX, party = get_crit_data(
                 seq,
-                net,
                 agent,
-                device,
                 5,
             )
             X.extend(partX)
@@ -128,6 +129,16 @@ def compute(
             f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
+
+    n_feats = len(env.feature_names)
+    if memory != "no_memory":
+        out_layers = nn.Sequential(*net[2:])
+        net = OneStepLSTM(
+            inp_layers=net[0],
+            lstm=net[1],
+            out_layers=out_layers,
+            n_feats=n_feats,
+        )
 
     if extras != "none":
         if not os.path.exists(
@@ -150,7 +161,7 @@ def compute(
             X = one_hot_action(X)
 
     if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
-        baseline = create_baseline(X)
+        baseline = create_baseline(X, n_feats)
         torch.save(baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt")
     else:
         baseline = torch.load(
@@ -259,6 +270,7 @@ def compute(
                     net,
                     memory,
                     agent,
+                    device,
                     amount_cycles=10000,
                     steps_per_cycle=100,
                     test=True,
@@ -271,7 +283,7 @@ def compute(
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
-                X_test, y_test = get_crit_data(seq, net, agent, device, 5)
+                X_test, y_test = get_crit_data(seq, agent, 5)
 
                 with lzma.open(
                     f".{env.metadata['name']}/{memory}/{agent}/crit/prediction_test_data.xz",
@@ -286,7 +298,7 @@ def compute(
                     X_test, y_test = pickle.load(f)
 
             if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
-                baseline = create_baseline(X_test)
+                baseline = create_baseline(X_test, n_feats)
                 torch.save(
                     baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
                 )
@@ -375,10 +387,10 @@ def compute(
 
 
 def crit_compare(agent, memory, feature_names, act_dict):
-    extras = ["action", "one-hot", "none"]
+    extras = ["none", "action", "one-hot"]
     explainer_extras = ["none", "ig", "shap"]
 
-    table = np.zeros((len(extras), len(explainer_extras), 3))
+    table = np.zeros((len(extras), len(explainer_extras)))
 
     ray.init(ignore_reinit_error=True)
 
@@ -402,11 +414,10 @@ def crit_compare(agent, memory, feature_names, act_dict):
                 explainer_extras=expl,
                 memory=memory,
             )
-            for k, out in enumerate(outs):
-                table[i, j, k] = out
+            table[i, j] = outs[1]
 
     table = np.array(table)
-    df = pandas.DataFrame(data=table[:, :, 1], columns=explainer_extras)
+    df = pandas.DataFrame(data=table, columns=explainer_extras)
 
     with open(f".{env_name}/{memory}/{agent}/table_data_crit.txt", "w") as f:
         f.write(df.to_latex())

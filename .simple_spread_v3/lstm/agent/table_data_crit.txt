@@ -1,0 +1,9 @@
+\begin{tabular}{lrrr}
+\toprule
+ & none & ig & shap \\
+\midrule
+0 & 0.730967 & 0.775767 & 0.739200 \\
+1 & 0.715100 & 0.778400 & 0.741933 \\
+2 & 0.728867 & 0.779600 & 0.742567 \\
+\bottomrule
+\end{tabular}
