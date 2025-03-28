@@ -72,8 +72,9 @@ def ig_extract(net, obs, action, agent, feature_names, act_dict, device):
     )
 
 
-def create_baseline(X):
-    num_feats = len(env_creator().feature_names)
+def create_baseline(X, n_feats):
     X = numpyfy(X)
-    baseline = torch.mean(torch.tensor(X[:, :num_feats]), dim=0).unsqueeze(0)
+
+    baseline = torch.mean(torch.tensor(X[:, :n_feats]), dim=0).unsqueeze(0)
+
     return baseline.to(dtype=torch.float32)
