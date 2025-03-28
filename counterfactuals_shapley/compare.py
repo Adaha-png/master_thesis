@@ -469,6 +469,7 @@ def compute(
                     method="gausslegendre",
                     return_convergence_delta=False,
                 )
+
                 X_test = torch.Tensor(X_test).cpu()
                 X_test = add_ig(
                     net.cpu(),
@@ -546,9 +547,9 @@ def compute(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
-    if len(plot_paths) < len(y[0]):
+    if len(plot_paths) < len(y[0]) or True:
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
-        indices = torch.randperm(len(X_test))[:50]
+        indices = torch.randperm(len(X_test))[:2]
         make_plots(
             expl,
             X_test[indices],
@@ -557,6 +558,7 @@ def compute(
             extras,
             explainer_extras,
         )
+
     else:
         print("Plots already created, delete existing to make new ones, skipping..")
 
