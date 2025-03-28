@@ -1,7 +1,8 @@
 \documentclass[UKenglish]{uiomasterthesis}
+\usepackage{{booktabs}}
 \usepackage{algpseudocode}
 \usepackage{algorithm}
-\usepackage{graphicx} % Required for inserting images
+\usepackage{graphicx} 
 \usepackage[UKenglish]{uiomasterfp}
 \usepackage[nottoc]{tocbibind}
 \usepackage[hidelinks]{hyperref}
@@ -9,17 +10,23 @@
 \usepackage{amsfonts}
 \usepackage[printonlyused]{acronym}
 \usepackage{tikz}
+\usepackage{pgfplots} 
 \usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
 \addbibresource{ref.bib}
 \usetikzlibrary{arrows, arrows.meta, positioning, calc}
 \usepackage{listofitems}
+
+
 \title{Explainable Reinforcement Learning}
 \subtitle{Discovering intent based explanations for heterogeneous cooperative multi agent reinforcement learning agents}
 \author{Ada Hatland}
 \date{August 2024}
 
+
 \pagenumbering{roman}
+
 \begin{document}
+
 \uiomasterfp[master, program={Informatics: Robotics and Intelligent Systems},
   color=orange, dept={Department of Informatics}, fac={The Faculty of Mathematics and Natural Sciences},
   supervisors={Dr. Dennis Gro\ss \and Prof. Kyrre Glette\and Dr. Helge Spieker}, image = {images/cat.png}]
@@ -45,6 +52,7 @@ I would like to thank my external supervisor Dennis Gro\ss, as well as my intern
     \acro  {ppo}  [PPO]  {Proximal Policy Optimization}
     \acro  {drl}  [DRL]  {Deep Reinforcement Learning}
     \acro  {rnn}  [RNN]  {Recurrent Neural Network}
+    \acro  {lstm}  [LSTM]  {Long Short Term Memory}
     \acro  {mbrl}  [MBRL]  {Model-Based Reinforcement Learning}
     \acro  {llm}  [LLM]  {Large Language Model}
     \acro  {ea}  [EA]  {Evolutionary Algorithm}
@@ -62,11 +70,13 @@ This is the abstract
 
 \lefthyphenmin=1000
 \tableofcontents
+\listoftables
+\listoffigures
 \chapter{Introduction}
 
 \pagenumbering{arabic}
 
-Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models like AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
+Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models such as AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
 
 \section{Motivation}
 \label{sec:motivation}
@@ -240,12 +250,12 @@ V^\pi(s) = \mathbb{E} \left[ \sum_{t=0}^{\infty} \gamma^t R(s_t, a_t, s_{t+1}) \
 where \(V^\pi(s)\) is the value function that represents the expected return starting from state \(s\) and following policy \(\pi\). See figure \ref{fig:rl_basics}.
 
 
-\subsection{Markoc Decision Process in Multi Agent Reinforcement Learning}
+\subsection{Markov Decision Process in Multi Agent Reinforcement Learning}
 In a \ac{marl} setting agents could have shared or independent \acp{mdp} depending on architecture. There are three main branches of \ac{marl}, cooperative, competitive and mixed. Our focus will be on cooperative \ac{marl}.
 In a cooperative \ac{marl} setting the goal is some social welfare function that maximises rewards for the agents, either collective rewards or a mix of collective and individual rewards. In such a setting each agent has \ac{mdp}. Assuming that state space \(\mathcal{S}\) and discount factor \(\gamma\) is shared, which they will be in all my experiments, if two agents have the same reward structure $R$ and action space \(\mathcal{A}\) their objective would be the same, in which case they could share policy \(\pi\) and could therefore share \(\mathcal{M}\).
 
 \subsection{Deep Reinforcement Learning}
-Traditional RL methods struggle with scalability due to the fact that they rely on discrete state representations. DRL uses deep \acp{nn} to approximate the policy function $\pi_\theta(s)$, the value function $V_\phi(s)$, or the Q-function $Q_\theta(s,a)$, making it possible to represent these functions in continuous and complex environments. See figure \ref{fig:neural_network}. Input layer is size of state for all three functions. Output layer is size of action space for $Q_\theta(s,a)$ and $\pi_\theta(s)$. $V_\phi(s)$ only has one output node. In a feed forward \ac{nn} like we have here each node has the value of some activation function $\phi(x)$ where $x$ is the sum of nodes of the previous layer multiplied by their respective weights, usually as well as adding some bias, shown as the connections between the nodes. Common activation functions are $ReLU(x) = max(0,v)$ and $tanh=\frac{e^v-e^v}{e^v+e^v}$ where $v$ is the value before activation.
+Traditional RL methods struggle with scalability due to the fact that they rely on discrete state representations. \ac{drl} uses deep \acp{nn} to approximate the policy function $\pi_\theta(s)$, the value function $V_\phi(s)$, or the Q-function $Q_\theta(s,a)$, making it possible to represent these functions in continuous and complex environments. See figure \ref{fig:neural_network}. Input layer is size of state for all three functions. Output layer is size of action space for $Q_\theta(s,a)$ and $\pi_\theta(s)$. $V_\phi(s)$ only has one output node. In a feed forward \ac{nn} like we have here each node has the value of some activation function $\phi(x)$ where $x$ is the sum of nodes of the previous layer multiplied by their respective weights, usually as well as adding some bias, shown as the connections between the nodes. Common activation functions are $ReLU(x) = max(0,v)$ and $tanh=\frac{e^v-e^v}{e^v+e^v}$ where $v$ is the value before activation.
 \begin{figure}[H]
     \begin{center}
     \begin{tikzpicture}[
@@ -339,7 +349,7 @@ Recurrency in \ac{nn} is a way to carry over information from previous timesteps
     \draw[->, thick, orange] (h2) -- (h3) node[midway, right=4pt] {$W_h$};
     \end{scope}
 \end{tikzpicture}
-\caption{Recurrent neural network}
+\caption{Recurrent neural network showing a 3 step time series with hidden values propagating through time.}
 \label{fig:rnn}
 \end{figure}
 \end{center}
@@ -386,16 +396,10 @@ During inference, we can then apply the explainer to a state and action to get t
 
 \subsubsection{Use Cases}
 
-Designing a \ac{drl} solution requires choosing features in the observation,\\ hyperparameter tuning, policy design and reward function among other things. This is a time, and resource, consuming process. These are usually picked by trial-and-error but could be made easier with assistance from an explainer. % See Figure \ref{fig:bitrate}. 
+Designing a \ac{drl} solution requires choosing features in the observation, hyperparameter tuning, policy design and reward function among other things. This is a time, and resource, consuming process. These are usually picked by trial-and-error but could be made easier with assistance from an explainer.
 
 Another, and perhaps more important, use case is safety. If when online, i.e. the chosen action will actually affect the state, we are expecting high likelihood of an unsafe state, we could instead of opting for the chosen action fall back to a known safe action, that could have a lower expected return, i.e. breaking instead of turning a corner if we have limited vision around the corner.
 
-% \begin{figure}
-% 	\includegraphics[width=\textwidth]{images/dog-final.png}
-% 	\caption{Using a future-based explainer as debugger to avoid stalling for adaptive bitrate streaming as found in "Towards Future-Based Explanations for Deep \ac{rl} Network Controllers" \cite{10.1145/3626570.3626607}}
-% 	\label{fig:bitrate}
-% \end{figure}
-% \medskip
 
 \subsubsection{Definition of Intent}
 We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
@@ -448,6 +452,7 @@ There are 4 hypothesises tested by the paper. The last two considers laymen user
 This section describes recent development in the field of planning and future predictions. All the papers described here are directly relevant to the methods i developed.
 
 \subsection{Predicting Future Actions Of Reinforcement Learning Agents}
+\label{sec:predicting_actions}
 This paper describes a method developed by the author that predicts future actions and events \cite{chung2024predictingfutureactionsreinforcement}. It does this for non planning policies, like Impala, implicit planning policies like \ac{drc}, see section \ref{sec:impl_planning}, and explicit planning policies like MuZero and Thinker.
 
 Non planning policies are policies designed without planning in mind. Pure \ac{nn} policies without recurrency are considered to be non planning, as they have not been found to exhibit planning like behaviour. This paper found that when predicting future states and actions both inner states from implicit planners, and explicit planners improved accuracy over non planning agents.
@@ -458,8 +463,12 @@ The paper proposes two methods on predicting future states and actions, simulati
 
 \subsection{An Investigation of Model Free Planning}
 \label{sec:impl_planning}
+This paper investigates whether planning like behaviour can emerge from model free \ac{rl}, without any explicit planning methods or inductive biases designed to induce planning behaviour \cite{guez2019investigationmodelfreeplanning}. The authors introduce and explore if the \ac{drc} architecture can learn to implicitly plan through training. World models suffer from scalability issues, and inductive biases require a priori knowledge of the environment. The \ac{drc} architecture is comprised of $3$ layers of ConvLSTMs and each layer is iterated through $3$ times each at each timestep.
+
+This architecture is tested on domains that require planning such as Sokoban, and they test the agents ability to generalize as well as data efficiency. The results of the paper is that not only does the model exhibit planning like behaviour, but it outperforms state of the art methods that use inductive biases or world models. The paper described in section \ref{sec:predicting_actions} finds that using the inner state of implicit planner agents improves predicted future states and actions.
 
 \subsection{Stabilizing Transformers for Reinforcement Learning}
+
 
 \medskip
 \chapter{Methodology}
@@ -510,18 +519,6 @@ In the case of continuous actions we instead alter actions in multiple timesteps
 \end{algorithm}
 
 
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/best_counterfactuals.pdf}
-	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
-	\label{fig:pareto} 
-\end{figure}
-
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/best_counterfactuals_with_model.pdf}
-	\caption{Pareto optimal points obtained with 2000 generations and population of 400 with \ac{nsga}}
-	\label{fig:pareto_model} 
-\end{figure}
-
 \section{Feature importance}
 
 \subsection{Shapley values for observations}
@@ -530,39 +527,36 @@ The Shapley value has a computational complexity of $O(2^n)$, and because of thi
 Since we have forward passes of the policy, and each can be considered one example of a game we sample the games and use the average marginal contribution over all the games instead of just one game.
 The Shapley value can help us understand how the policy acts in general. We can also use it to get explanations for single observations, however these explanations won't always have high fidelity. We will explore more of how the fidelity of Shapley values for single explanations compare to high fidelity explainability methods like gradient methods. See section \ref{sec:intgrad}
 
-
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/spread_policy_move_up_shap.pdf}
-	\caption{Shapley values for moving up in a critical state in which the agent decided to move up with a confidence of 0.810}
-	\label{fig:shap} 
-\end{figure}
-
 \begin{algorithm}
-\caption{Shapley Values for Feature Importance in Reinforcement Learning}
+\caption{Shapley Value Calculation with Baseline Replacement}
 \label{alg:shapley}
 \begin{algorithmic}
-    \State \textbf{Input:} \ac{rl} policy $\pi_\theta$, set of features $F$
+    \State \textbf{Input:} Model $f$, input sample $x$, baseline $x'$, set of features $F$
     \State \textbf{Output:} Shapley values $\phi_f$ for each feature $f \in F$
-    \State $\phi_f \gets 0 \; \forall f \in F$ \Comment{Initialize Shapley values to zero}
+    \State $\phi_f \gets 0 \; \forall f \in F$ \Comment{Initialize Shapley values}
     \State $n \gets |F|$ \Comment{Number of features}
     
     \ForAll{$f \in F$}
         \ForAll{$S \subseteq F \setminus \{f\}$}
-            \State $V_S \gets \texttt{value}(\pi_\theta, S)$ \Comment{Evaluate \ac{rl} model $\pi_\theta$ with feature set $S$}
-            \State $V_{S \cup \{f\}} \gets \texttt{value}(\pi_\theta, S \cup \{f\})$ \Comment{Evaluate \ac{rl} model $\pi_\theta$ with feature set $S \cup \{f\}$}
-            
-            \State $\phi_f \gets \phi_f + \frac{|S|!(n - |S| - 1)!}{n!} \left(V_{S \cup \{f\}} - V_S\right)$
-            \Comment{Update Shapley value for feature $f$}
+            \State $x_S \gets \texttt{construct}(x, x', S)$ \Comment{Replace features not in $S$ with baseline values}
+            \State $x_{S \cup \{f\}} \gets \texttt{construct}(x, x', S \cup \{f\})$
+            \State $\Delta \gets f(x_{S \cup \{f\}}) - f(x_S)$ \Comment{Marginal contribution of feature $f$}
+            \State $\phi_f \gets \phi_f + \frac{|S|!(n - |S| - 1)!}{n!} \Delta$
         \EndFor
     \EndFor
+    \State \Return $\{\phi_f : f \in F\}$
     
-    \Function{value}{$\pi_\theta, S$}
-        \State \textbf{Input:} \ac{rl} model $\pi_\theta$, feature set $S$
-        \State \textbf{Output:} Model performance with feature set $S$
-        
-        \State $\texttt{Train model } \pi_\theta \texttt{ using features in } S$
-        \State $\texttt{Evaluate model } \pi_\theta$
-        \State \Return \texttt{model performance}
+    \Function{construct}{$x, x', S$}
+        \State \textbf{Input:} Original sample $x$, baseline $x'$, feature subset $S$
+        \State \textbf{Output:} Modified sample $x_S$
+        \ForAll{$f \in F$}
+            \If{$f \in S$}
+                \State $x_S[f] \gets x[f]$
+            \Else
+                \State $x_S[f] \gets x'[f]$ \Comment{Replace with baseline value}
+            \EndIf
+        \EndFor
+        \State \Return $x_S$
     \EndFunction
 \end{algorithmic}
 \end{algorithm}
@@ -597,11 +591,8 @@ By integrating the gradient of the model prediction when going from a specified 
 \end{algorithmic}
 \end{algorithm}
 
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/intgrad_move_up.pdf}
-	\caption{Feature importance found with integrated gradients method in a state where the agent decided to move up with a confidence of 0.810}
-	\label{fig:intgrad} 
-\end{figure}
+
+\subsection{Choosing a baseline}
 
 \section{Extracting intent}
 
@@ -610,44 +601,232 @@ Additionally, we train different models with different sets of inputs to identif
 After 200 epochs the base prediction model reached a evaluation loss of 0.0407, the model with integer action as part of the input reached a evaluation loss of 0.0359 and the model with one-hot encoded action as part of the input reached an evaluation loss of 0.0322. See figure \ref{fig:pred_loss_none}, \ref{fig:pred_loss_action} and \ref{fig:pred_loss_one-hot}. Both the base model and the one-hot action model stagnate long before 200 epochs is reached. If we let the model with integer action as input train for another 50 epochs it does not improve. The test loss for these three models respectively is ... . These graphs and values indicate that while action and an explanation are useful for extracting intent, in the context of our environment and model one-hot values and integrated gradient explanation are the most useful. The difference between using Shapley values and
 
 
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/pred_model_none_none.pdf}
-	\caption{Loss on evaluation set during training with only observation as input}
-	\label{fig:pred_loss_none} 
-\end{figure}
+\section{LSTM values}
+An \ac{lstm} cell takes as input a cell state $c_{t-1}$, a hidden state $h_{t-1}$, and an input $X_t$ for each timestep. It outputs a cell state $c_{t}$, a hidden state $h_{t}$ and an output $y_t$. $h_{t-1}$ is concatenated with $X_t$ and then with trainable weight matrices $\textbf{W}$ and biases $b$, $c_t$ and $h_t$ are computed according to the following equations:
 
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/pred_model_action_none.pdf}
-	\caption{Loss on evaluation set during training with observation and action as integer as input}
-	\label{fig:pred_loss_action} 
-\end{figure}
+\[
+f_t = \sigma(W_f [h_{t-1}, x_t] + b_f)
+\]
 
-\begin{figure}[!ht]
-	% \includegraphics[width=\columnwidth]{images/pred_model_one-hot_none.pdf}
-	\caption{Loss on evaluation set during training with observation and action one-hot encoded as input}
-	\label{fig:pred_loss_one-hot} 
+\[
+i_t = \sigma(W_i [h_{t-1}, x_t] + b_i)
+\]
+
+\[
+\tilde{c}_t = \tanh(W_c [h_{t-1}, x_t] + b_c)
+\]
+
+\[
+c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
+\]
+
+\[
+o_t = \sigma(W_o [h_{t-1}, x_t] + b_o)
+\]
+
+\[
+h_t = o_t \odot \tanh(c_t)
+\]
+
+Intuitively, $f_t$ can be viewed as how much of the previous cell state $c_{t-1}$ to forget, $i_t$ can be viewed as how much of the candidate cell state $\tilde{c}_t$ to remember, and $o_t$ can be viewed as how much of the $c_{t}$ to output. Capital letters represent matrices and lowercase letters represent vectors.
+
+\begin{center}
+\begin{figure}
+\begin{tikzpicture}[>=Stealth, node distance=1.5cm, auto]
+\hspace{4cm}
+  % LSTM cell as a pastel purple box with rounded corners
+  \node[draw, fill=purple!30, rounded corners, minimum width=3cm, minimum height=2cm] (lstm) {LSTM};
+
+  % Incoming arrows on the left: previous cell state (c) and hidden state (h)
+  \draw[<-] ([yshift=0.3cm]lstm.west) -- ++(-1,0) node[left] {\(c_{t-1}\)};
+  \draw[<-] ([yshift=-0.3cm]lstm.west) -- ++(-1,0) node[left] {\(h_{t-1}\)};
+
+  % Outgoing arrows on the right: new cell state (c) and hidden state (h)
+  \draw[->] ([yshift=0.3cm]lstm.east) -- ++(1,0) node[right] {\(c_t\)};
+  \draw[->] ([yshift=-0.3cm]lstm.east) -- ++(1,0) node[right] {\(h_t\)};
+
+  \draw[<-] (lstm.south) -- ++(0,-1) node[below] {\(x_t\)};
+  \draw[->] (lstm.north) -- ++(0,1) node[above] {\(h_t\)};
+\end{tikzpicture}
+\caption{Simplified illustration of an \ac{lstm} layer}
+\label{fig:lstm}
 \end{figure}
+\end{center}
+
+As $c_t$ and $h_t$ are helpful when predicting future actions and states \cite{chung2024predictingfutureactionsreinforcement} when considering the \ac{drc} architecture, I hypothesize that the same holds when using a regular \ac{lstm} layer. See figure \ref{fig:lstm}.
 
 
 
 \chapter{Experiments}
 \section{General experimental setup}
-We have several \acp{nn} for each experiment. The goal is to train them to predict states and events. For the state prediction I initially trained a \ac{nn} to take the observations made by a type of agent from step $n$ and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_pos$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
+I have several \acp{nn} for each experiment. The goal is to train them to predict states and events. For the state prediction I initially trained a \ac{nn}, $state_{base}$ to take the observations made by a type of agent from step $n$, $Obs_n$, and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_pos$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
 
-We also trained a \ac{nn} for event prediction. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps.
+I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps. 
 
-The \ac{nn} was a fully connected network, had two hidden layers of size 64 each and used the activation function $tanh$. This neural network got an accuracy of placeholder on the test set and the average distance from target was placeholder on the test set. This \ac{nn} is purely a post hoc explainer and used no information about the policy what so ever to explain the agents intention. As aforementioned we want to include information about the policy to discover how we can improve this prediction, and better discover the intent of the agent.
+I consider the accuracy of $event_{base}$ and the average error measured in euclidean distance of $state_{base}$ to be the baselines i compare results against in the first experiment. I will train other neural networks.
+
+The \ac{nn} was a fully connected network, had two hidden layers of size 64 each and used the activation function $tanh$. This neural network got an accuracy of $0.8244$ on the test set and the average distance from target was $0.0409$ on the test set. This \ac{nn} is purely a post hoc explainer and used no information about the policy what so ever to explain the agents intention. As aforementioned we want to include information about the policy to discover how we can improve this prediction, and better discover the intent of the agent.
 
 All hyper parameters stayed the same. Only The dataset, and therefore also the input layer, was different between the runs. I trained the networks for a total of $200$ epochs, after which improvement was negligible, if at all existent, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set.
 
-\section{Action inclusion}
-\subsection{Setup}
-\subsection{Results}
-\subsection{Analysis}
+I decided to reject all results that showed a relative change of less than $2\%$ when compared to the baseline, as \acp{nn} will always be approximations of the optimal distribution achievable when considering a specific dataset, which means that even in the case of new input having no relevant information we will get some variation in the results. An improvement of $2\%$ or less is not an improvement worth the cost in most scenarios.
 
-\section{Experiment 2}
+\section{Action and explanation inclusion}
 \subsection{Setup}
+I enhanced both the dataset $D_{pos}$ and $D_{crit}$ with a series of other data. For both datasets I included the action, encoded by an integer from $0$ to $n_{acts}$, i.e. the amount of actions an agent has available, taken at $Obs_n$ for each data point, to use as input for an \ac{nn}. I then trained two \acp{nn} with the same architecture as $state_{base}$ and $event_{base}$ respectively, and once again measured accuracy for the event predictor net with included action, and average error for the state predictor net with included action. If the predictions improved I considered the action to be useful on its own for the predictions in the given environment.
+
+I then one-hot encoded the action, i.e. encoded the action as a $n_{acts}$ dimensional unit vector with a 1 in the chosen action dimension. This includes the same amount of information as represented as an integer, however I hypothesized that the resulting network would achieve higher performance with one-hot encoded actions as the distance between independent actions when one-hot encoding the actions are all the same, as opposed to when encoding the actions as an integer when the distance between two actions is not constant. For example, between the action encoded as the integer 2 and the action encoded as the integer 3 the Manhattan distance is 1, but between the action encoded as the integer 2 and the action encoded as the integer 4 the Manhattan distance is 2. When one-hot encoding these actions the Manhattan distance between two distinct actions will in all cases be 2. As in the previous cases I also trained a \ac{nn} on the datasets enhanced with one hot encoded actions.
+
+After creating datasets with actions encoded different ways I also created two feature importance explanations for the action chosen in each of the initial observations. Shapley values and Integrated gradients were the two methods chosen. I decided on 2 feature importance measures that internally uses different methods of calculation, gradients and SHAP, to explore if they would yield different results. The motivation behind including feature importance explanations is that it describes some if the inner processing of the policy, and might therefore elucidate what kind of actions it might take in future states, and therefore include some of the intent. On each of the previous datasets I created new datasets with these two feature importance methods included.
+
+In total I trained 18 neural networks per environment, one for each dataset constructed, and compared the results for accuracy on the event prediction networks and the results for average error on the state prediction networks. I repeated this experiment for a few different environments to explore if the results vary depending on environment.
+\begin{figure}[!ht]
+	\input{images/simple_spread_v3/no_memory/agent/pred_models/pred_model_action_ig.pgf}
+	\label{fig:pred_loss_action_ig} 
+\end{figure}
+
 \subsection{Results}
+
+The result which deviates the most from the baseline in table \ref{tab:state_simpl} is the drop in error of $1 - \frac{0.288748}{0.302494} = 1 - 0.954558 \approx 4.54\%$ when including both actions encoded as one-hot values as well as Shapley values as input for the prediction model, compared to when neither action nor any form of feature importance was included. See table \ref{tab:state_simpl}.
+
+\begin{center}
+\captionof{table}{Average error for state prediction on the Simple Spread environment without frame stacking}
+\label{tab:state_simpl}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & 0.302494 & 0.301515 & 0.304524 \\
+Integer & 0.298232 & 0.301110 & 0.302363 \\
+One-hot & 0.296869 & 0.297798 & 0.288748\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+When considering the event predictions for the Simple Spread environment the inclusion of explanations make a noticeably increased difference. With misclassifications being reduced from $1 - 0.700933 = 0.299067$ to $1-0.742933=0.257067$ when including actions encoded as one hot vectors. A decrease of $1 - \frac{0.257067}{0.299067} = 1 - 0.859563 \approx 14.04\%$. Which is the smallest improvement of the $7$ methods that improved the predictions by more than $2\%$. See table \ref{tab:crit_simpl}.
+
+\begin{center}
+\captionof{table}{Accuracy for state prediction on the Simple Spread environment without frame stacking}
+\label{tab:crit_simpl}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+    None & 0.700933 & 0.801333 & 0.777867 \\
+    Integer & 0.700700 & 0.800967 & 0.776567 \\
+    One-hot & 0.742933 & 0.800967 & 0.776233 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In the case of state predictions on the Knights Archers Zombies environment the additions of feature importance does not seem to have any important impact as none of the improvements. The inclusion of actions seem to have made an impact on the accuracy of the state prediction, though this decrease in error might just stem from learned knowledge of how an action changes the state, rather than knowledge of how to extract intent from an action. See table \ref{tab:state_kaz}.
+
+\begin{center}
+\captionof{table}{Average error, euclidean distance, for state prediction on the Knights Archers Zombies environment}
+\label{tab:state_kaz}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No Action & 0.040901 & 0.040928 & 0.040728 \\
+Integer & 0.039768 & 0.040216 & 0.039505 \\
+One-hot & 0.038924 & 0.039241 & 0.038873 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In the case of event predictions on the Knights Archers Zombies environment none of the additions seem to have any important impact as none of the improvements. As none of the changes are higher than $2\%$ we do not consider these results relevant. See table \ref{tab:event_kaz}.
+
+\begin{center}
+\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment}
+\label{tab:event_kaz}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & 0.824400 & 0.829300 & 0.820650 \\
+Integer & 0.822700 & 0.828850 & 0.819250 \\
+One-hot & 0.824800 & 0.826700 & 0.822950 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Analysis}
+to-do, statistical tests
+
+\section{Memory inclusion}
+
+\subsection{Setup}
+
+There are two main ways of including temporal information in reinforcement learning policies. The first is to include more than just the last observation as input, known as frame stacking. Another design I implemented, that also includes temporal information for the policy is a design that includes an \ac{lstm} layer in that takes input from the second hidden layer and outputs to the last fully connected layer.
+
+We once again construct datasets which contain pairs on the form $(obs, pos)$ and $(obs, crit)$ respectively. For the observations for the policy using an \ac{lstm} we also include the hidden values and cell states, $(h,c)$, as part of the input for the event prediction and state prediction \acp{nn}, to include the temporal information used by the policy for the prediction \acp{nn}, similarly to in the case with frame stacking.
+
+I will once again train 18 neural networks for each environment and see how including the hidden values and cell states of the \ac{lstm} affects the predictions.
+
+\subsection{Results}
+When we include frame stacking in the Simple Spread environment in our case we include the previous 3 observations as well so the total observation space has size $18\times 4 = 72$. This auxiliary information requires a new policy to be trained as the representation of the environment is different from the case without frame stacking. The baseline results are unchanged from the case without frame stacking, and all other improvements are less pronounced. See table \ref{tab:state_simpl_stack}.
+
+\begin{center}
+\captionof{table}{Average error for state prediction on the Simple Spread environment with frame stacking}
+\label{tab:state_simpl_stack}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & 0.303008 & 0.304275 & 0.298301 \\
+Integer & 0.289100 & 0.305222 & 0.291256 \\
+One-hot & 0.305099 & 0.305001 & 0.298962 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For event prediction on the Simple Spread environment with frame stacking the results are improved for no explanation included, and improved in some cases when considering explanations as well, from the results in the case without frame stacking. See table \ref{tab:event_simpl_stack}.
+
+
+\begin{center}
+\captionof{table}{Average accuracy for event prediction on the Simple Spread environment with frame stacking}
+\label{tab:event_simpl_stack}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & 0.737900 & 0.80300 & 0.756633 \\
+Integer & 0.724767 & 0.804433 & 0.763100 \\
+One-hot & 0.766567 & \textbf{0.812067} & 0.780700 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\captionof{table}{Average error for state prediction on the Simple Spread environment with \ac{lstm} output and cell states}
+\label{tab:state_simpl_lstm}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Value \\
+\midrule
+No action & 0.306358 & 0.304827 & 0.305336 \\
+Integer & 0.306486 & 0.304529 & 0.306255 \\
+One-hot & 0.307398 & 0.305968 & 0.305619 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+    \captionof{table}{Average accuracy for event prediction on the Simple Spread environment with \ac{lstm} output and cell states}
+\label{tab:event_simpl_lstm}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & 0.730967 & 0.775767 & 0.739200 \\
+Integer & 0.715100 & 0.778400 & 0.741933 \\
+One-hot & 0.728867 & 0.779600 & 0.742567 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
 \subsection{Analysis}
 
 \section{Experiment 3}
