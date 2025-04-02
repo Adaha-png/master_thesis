@@ -137,6 +137,7 @@ def shap_plot(
     # Draw vertical line at x=0
     ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
     ax.set_ylabel("Feature")
+    ax.set_xlabel("Shapley Value")
 
     # Add a color bar for feature values
     cbar = plt.colorbar(scatter, ax=ax)
