@@ -95,7 +95,7 @@ def shap_plot(
 
     else:
         mean_shap_values = np.mean(np.abs(shap_values), axis=0)
-        top_indices = np.argsort(mean_shap_values)[-12:]
+        top_indices = np.argsort(mean_shap_values)[-15:]
         top_feature_names = np.array(feature_names)[top_indices]
         top_shap_values = shap_values[:, top_indices]
         flattened_shap_values = top_shap_values.flatten()
@@ -118,7 +118,7 @@ def shap_plot(
     )
 
     # Create a new figure and axis
-    _, ax = plt.subplots(figsize=(8, 8))
+    _, ax = plt.subplots(figsize=(6, 9))
 
     # Scatter plot with color gradient
     scatter = ax.scatter(
