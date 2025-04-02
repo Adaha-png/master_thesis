@@ -88,6 +88,7 @@ def get_policy(
 
 
 if __name__ == "__main__":
+    explainer_extras = ["none", "ig", "shap"]
     seed = 42
     random.seed(seed)
     np.random.seed(seed)
@@ -99,12 +100,11 @@ if __name__ == "__main__":
     env = env_creator()
     agent = env.possible_agents[0].split("_")[0]
 
-    # memory = "no_memory"
-    # policy_path = get_policy(
-    #     should_tune=False, new_policy=False, timesteps=20000000, memory=memory
-    # )
-    # compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
-    # crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
+    memory = "no_memory"
+    policy_path = get_policy(
+        should_tune=False, new_policy=False, timesteps=2000000, memory=memory
+    )
+    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
 
     for memry in ["lstm", "attention"]:
         policy_path = get_policy(

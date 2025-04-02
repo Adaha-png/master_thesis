@@ -78,16 +78,6 @@ def shap_plot(
             aggregated_feature_list.append(aggregated_feature)
             aggregated_feature_names.append(combined_name)
 
-        # for i in range(len(slices) - 1):
-        #     start = slices[i]
-        #     end = slices[i + 1]
-        #     aggregated_shap = np.sum(shap_values[:, start:end], axis=1)
-        #     aggregated_shap_list.append(aggregated_shap)
-        #     aggregated_feature = np.sum(X[:, start:end], axis=1)
-        #     aggregated_feature_list.append(aggregated_feature)
-        #     combined_name = f"{feature_names[start]} to {feature_names[end-1]}"
-        #     aggregated_feature_names.append(combined_name)
-
         # Convert lists into arrays with shape (n_instances, n_groups)
         aggregated_shap_values = np.column_stack(aggregated_shap_list)
         aggregated_feature_values = np.column_stack(aggregated_feature_list)

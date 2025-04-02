@@ -10,3 +10,4 @@ tex/main.toc
 .*/*/prediction_data_part*
 .*/*/prediction_test_data.xz
 .*/*/tempdir
+.*/*/*/run_*

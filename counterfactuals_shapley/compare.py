@@ -13,6 +13,7 @@ from captum.attr import IntegratedGradients
 from ray.rllib.algorithms.ppo import PPO
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
+from scipy.stats import ttest_ind
 from torch import nn
 from tqdm import tqdm
 
@@ -76,7 +77,7 @@ def distance(predicted, y):
     return np.linalg.norm(predicted - y, axis=1)
 
 
-def extract_observations(history, agent_name, memory, n, m):
+def extract_observations(history, agent_name, memory, n, m, coords_ind):
     obs_n = []
     obs_n_plus_m = []
 
@@ -107,13 +108,18 @@ def extract_observations(history, agent_name, memory, n, m):
         step_record = history[step_index]
         for agent, data in step_record.items():
             if agent.startswith(agent_name):
-                obs_n_plus_m.append(data.get("observation")[1:3])
+                obs_n_plus_m.append([data.get("observation")[i] for i in coords_ind])
     else:
         return
+
     return obs_n, obs_n_plus_m
 
 
 def extract_pairs_from_histories(histories, agent_name, memory, m, n=None):
+    env = env_creator()
+    coords_ind = env.coords_ind
+    env.close()
+
     obs_pairs = [
         extract_observations(
             history,
@@ -121,6 +127,7 @@ def extract_pairs_from_histories(histories, agent_name, memory, m, n=None):
             memory,
             n or np.random.randint(0, max(1, len(history) - m)),
             m,
+            coords_ind,
         )
         for history in tqdm(histories, desc="extracting obs and pos")
     ]
@@ -180,6 +187,7 @@ def compute(
     agent,
     feature_names,
     act_dict,
+    run,
     extras="none",
     explainer_extras="none",
     memory="no_memory",
@@ -198,7 +206,9 @@ def compute(
     env.reset()
     env_name = env.metadata["name"]
 
-    if not os.path.exists(f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz"):
+    if not os.path.exists(
+        f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data.xz"
+    ):
         print("Prediction data not found, creating...")
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         n_agents = len([ag for ag in env.possible_agents if agent in ag])
@@ -219,14 +229,20 @@ def compute(
 
         X = torch.Tensor(np.array(X))
         y = torch.Tensor(np.array(y))
-        os.makedirs(f".{env_name}/{memory}/{agent}/pred_data", exist_ok=True)
+
+        np.random.seed(run)
+        indices = np.random.randint(0, len(X) - 1, size=len(X))
+        X = X[indices]
+        y = y[indices]
+
+        os.makedirs(f".{env_name}/{memory}/{agent}/run_{run}/pred_data", exist_ok=True)
         with lzma.open(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "wb"
+            f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data.xz", "wb"
         ) as f:
             pickle.dump((X, y), f)
     else:
         with lzma.open(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data.xz", "rb"
+            f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
     n_feats = len(env.feature_names)
@@ -241,17 +257,17 @@ def compute(
 
     if extras != "none":
         if not os.path.exists(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz"
+            f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_action.xz"
         ):
-            add_action(X, net, agent, memory, device)
+            add_action(X, net, agent, run, memory, device)
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
         else:
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_action.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_action.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -260,51 +276,73 @@ def compute(
 
     if explainer_extras == "ig":
         if not os.path.exists(
-            f".{env.metadata['name']}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz"
+            f".{env.metadata['name']}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_ig.xz"
         ):
-            ig = IntegratedGradients(net.cpu())
-            if not os.path.exists(f".{env_name}/{memory}/{agent}/.baseline_future.pt"):
-                baseline = create_baseline(X, n_feats)
-                torch.save(
-                    baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
-                )
-            else:
-                baseline = torch.load(
-                    f".{env_name}/{memory}/{agent}/.baseline_future.pt",
-                    map_location=device,
-                    weights_only=True,
-                )
+            paths = glob.glob(
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_*_ig.xz"
+            )
+            if len(paths) > 0:
+                path = paths[0]
+                with lzma.open(path, "rb") as f:
+                    Obs_with_ig = pickle.load(f)
+                    Obs_with_ig = numpyfy(Obs_with_ig)
+                X = [
+                    np.array([*X[i], *Obs_with_ig[i, -n_feats:]]) for i in range(len(X))
+                ]
 
-            baseline = baseline.to(dtype=torch.float32, device="cpu")
-            X = torch.Tensor(X).cpu()
-            ig_partial = partial(
-                ig.attribute,
-                baselines=baseline,
-                method="gausslegendre",
-                return_convergence_delta=False,
-            )
-            X = add_ig(
-                net.cpu(),
-                agent,
-                memory,
-                X,
-                ig_partial,
-                device,
-                extras=extras,
-            )
+                with lzma.open(
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_ig.xz",
+                    "wb",
+                ) as f:
+                    pickle.dump(X, f)
+            else:
+                ig = IntegratedGradients(net.cpu())
+                if not os.path.exists(
+                    f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt"
+                ):
+                    baseline = create_baseline(X, n_feats)
+                    torch.save(
+                        baseline,
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
+                    )
+                else:
+                    baseline = torch.load(
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
+                        map_location=device,
+                        weights_only=True,
+                    )
+
+                baseline = baseline.to(dtype=torch.float32, device="cpu")
+                X = torch.Tensor(X).cpu()
+                ig_partial = partial(
+                    ig.attribute,
+                    baselines=baseline,
+                    method="gausslegendre",
+                    return_convergence_delta=False,
+                )
+                X = add_ig(
+                    net.cpu(),
+                    agent,
+                    run,
+                    memory,
+                    X,
+                    ig_partial,
+                    device,
+                    extras=extras,
+                )
         else:
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_ig.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_ig.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
 
     elif explainer_extras == "shap":
         if not os.path.exists(
-            f"{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz"
+            f"{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_shap.xz"
         ):
             paths = glob.glob(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_*_shap.xz"
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_*_shap.xz"
             )
             if len(paths) > 0:
                 path = paths[0]
@@ -317,21 +355,22 @@ def compute(
                 ]
 
                 with lzma.open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz",
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_shap.xz",
                     "wb",
                 ) as f:
                     pickle.dump(X, f)
             else:
                 if not os.path.exists(
-                    f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                    f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt"
                 ):
                     baseline = create_baseline(X, n_feats)
                     torch.save(
-                        baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                        baseline,
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
                     )
                 else:
                     baseline = torch.load(
-                        f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
                         map_location=device,
                         weights_only=True,
                     )
@@ -340,6 +379,7 @@ def compute(
                 X = add_shap(
                     net,
                     agent,
+                    run,
                     memory,
                     torch.Tensor(X),
                     baseline,
@@ -349,7 +389,7 @@ def compute(
 
         else:
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_data_{extras}_shap.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data_{extras}_shap.xz",
                 "rb",
             ) as f:
                 X = pickle.load(f)
@@ -363,10 +403,11 @@ def compute(
     ).to(device)
 
     if not os.path.exists(
-        f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt"
+        f".{env_name}/{memory}/{agent}/run_{run}/pred_models/pred_model_{extras}_{explainer_extras}.pt"
     ):
         pred_net = future_sight(
             agent,
+            run,
             memory,
             device,
             pred_net,
@@ -379,11 +420,11 @@ def compute(
 
     else:
         print(
-            f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+            f".{env_name}/{memory}/{agent}/run_{run}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
         )
         pred_net.load_state_dict(
             torch.load(
-                f".{env_name}/{memory}/{agent}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_models/pred_model_{extras}_{explainer_extras}.pt",
                 weights_only=True,
                 map_location=device,
             )
@@ -394,10 +435,10 @@ def compute(
         criterion = nn.MSELoss()
 
         if os.path.exists(
-            f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz"
+            f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz"
         ):
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "rb",
             ) as f:
                 X_test, y_test = pickle.load(f)
@@ -417,7 +458,7 @@ def compute(
                 )
 
             if not os.path.exists(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz"
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data.xz"
             ):
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
@@ -425,66 +466,82 @@ def compute(
                 X_test, y_test = extract_pairs_from_histories(seq, agent, memory, 10)
 
                 os.makedirs(
-                    f".{env_name}/{memory}/{agent}/pred_data",
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data",
                     exist_ok=True,
                 )
                 with lzma.open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz",
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data.xz",
                     "wb",
                 ) as f:
                     pickle.dump((X_test, y_test), f)
 
             else:
                 with lzma.open(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data.xz",
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data.xz",
                     "rb",
                 ) as f:
                     X_test, y_test = pickle.load(f)
 
             if not extras == "none":
-                X_test = add_action(X_test, net, agent, memory, device, save=False)
+                X_test = add_action(X_test, net, agent, run, memory, device, save=False)
                 if extras == "one-hot":
                     X_test = one_hot_action(X_test)
 
             if explainer_extras == "ig":
-                ig = IntegratedGradients(net.cpu())
-                if not os.path.exists(
-                    f".{env_name}/{memory}/{agent}/.baseline_future.pt"
-                ):
-                    baseline = create_baseline(X_test, n_feats)
-                    torch.save(
-                        baseline, f".{env_name}/{memory}/{agent}/.baseline_future.pt"
-                    )
+                paths = glob.glob(
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data_*_ig.xz"
+                )
+                if len(paths) > 0:
+                    path = paths[0]
+                    with lzma.open(path, "rb") as f:
+                        Obs_with_ig = pickle.load(f)[0]
+                        Obs_with_ig = numpyfy(Obs_with_ig)
+
+                    X_test = [
+                        np.array([*X_test[i], *Obs_with_ig[i, -n_feats:]])
+                        for i in tqdm(range(len(X_test)))
+                    ]
                 else:
-                    baseline = torch.load(
-                        f".{env_name}/{memory}/{agent}/.baseline_future.pt",
-                        map_location=device,
-                        weights_only=True,
+                    ig = IntegratedGradients(net.cpu())
+                    if not os.path.exists(
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt"
+                    ):
+                        baseline = create_baseline(X_test, n_feats)
+                        torch.save(
+                            baseline,
+                            f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
+                        )
+                    else:
+                        baseline = torch.load(
+                            f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
+                            map_location=device,
+                            weights_only=True,
+                        )
+
+                    baseline = baseline.cpu()
+                    ig_partial = partial(
+                        ig.attribute,
+                        baselines=baseline,
+                        method="gausslegendre",
+                        return_convergence_delta=False,
                     )
 
-                baseline = baseline.cpu()
-                ig_partial = partial(
-                    ig.attribute,
-                    baselines=baseline,
-                    method="gausslegendre",
-                    return_convergence_delta=False,
-                )
-
-                X_test = torch.Tensor(X_test).cpu()
-                X_test = add_ig(
-                    net.cpu(),
-                    agent,
-                    memory,
-                    X_test,
-                    ig_partial,
-                    device,
-                    extras=extras,
-                    save=False,
-                )
+                    X_test = torch.Tensor(X_test).cpu()
+                    X_test = add_ig(
+                        net.cpu(),
+                        agent,
+                        run,
+                        memory,
+                        X_test,
+                        ig_partial,
+                        device,
+                        extras=extras,
+                        save=False,
+                    )
 
             elif explainer_extras == "shap":
                 paths = glob.glob(
-                    f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_shap_*.xz"
+                    f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data_*_shap.xz"
                 )
                 if len(paths) > 0:
                     path = paths[0]
@@ -493,21 +550,21 @@ def compute(
                         Obs_with_shap = numpyfy(Obs_with_shap)
 
                     X_test = [
-                        np.array([*X_test[i], *Obs_with_shap[i, -18:]])
+                        np.array([*X_test[i], *Obs_with_shap[i, -n_feats:]])
                         for i in tqdm(range(len(X_test)))
                     ]
                 else:
                     if not os.path.exists(
-                        f".{env_name}/{memory}/{agent}/.baseline_future.pt"
+                        f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt"
                     ):
                         baseline = create_baseline(X, n_feats)
                         torch.save(
                             baseline,
-                            f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                            f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
                         )
                     else:
                         baseline = torch.load(
-                            f".{env_name}/{memory}/{agent}/.baseline_future.pt",
+                            f".{env_name}/{memory}/{agent}/run_{run}/.baseline_future.pt",
                             map_location=device,
                             weights_only=True,
                         )
@@ -516,6 +573,7 @@ def compute(
                     X_test = add_shap(
                         net,
                         agent,
+                        run,
                         memory,
                         torch.Tensor(X_test),
                         baseline,
@@ -525,7 +583,7 @@ def compute(
                     )
 
             with lzma.open(
-                f".{env_name}/{memory}/{agent}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
+                f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_test_data_{extras}_{explainer_extras}.xz",
                 "wb",
             ) as f:
                 pickle.dump((X_test, y_test), f)
@@ -547,9 +605,9 @@ def compute(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
-    if len(plot_paths) < len(y[0]) or True:
+    if len(plot_paths) < len(y[0]):
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
-        indices = torch.randperm(len(X_test))[:2]
+        indices = torch.randperm(len(X_test))[:50]
         make_plots(
             expl,
             X_test[indices],
@@ -572,7 +630,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
     env = env_creator()
     feature_names = copy.deepcopy(env.feature_names)
 
-    slices = [0, len(feature_names)]
+    slices = [len(feature_names)]
 
     if memory == "lstm":
         feature_names.extend([f"h {i}" for i in range(64)])
@@ -624,16 +682,53 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
         )
 
 
+def ttest(name_ider, agent, memory, explainer_extras):
+    env_name = env_creator().metadata["name"]
+
+    table_paths = glob.glob(f".{env_name}/{memory}/{agent}/run_*/table_{name_ider}.pkl")
+    full_table = []
+    for path in table_paths:
+        with open(path, "rb") as f:
+            table = pickle.load(f)
+
+        full_table.append(table)
+
+    full_table = np.array(full_table)
+    mean_table = np.mean(
+        full_table,
+        axis=0,
+    )
+
+    print(f"{mean_table=}")
+
+    with open(f".{env_name}/{memory}/{agent}/table_{name_ider}_mean.txt", "w") as f:
+        df = pandas.DataFrame(data=mean_table, columns=explainer_extras)
+        f.write(df.to_latex())
+
+    p_table = np.zeros((3, 3), dtype=np.float32)
+    for i in range(3):
+        for j in range(3):
+            if i + j == 0:
+                continue
+
+            p_table[i, j] = ttest_ind(
+                full_table[:, 0, 0],
+                full_table[:, i, j],
+                alternative="greater" if name_ider == "pred" else "less",
+            ).pvalue
+
+    with open(f".{env_name}/{memory}/{agent}/table_{name_ider}_p.txt", "w") as f:
+        df = pandas.DataFrame(data=p_table, columns=explainer_extras)
+        f.write(df.to_latex())
+
+
 def run_compare(agent, memory, feature_names, act_dict, device):
+    runs = 10
+
     extras = ["none", "action", "one-hot"]
     explainer_extras = ["none", "ig", "shap"]
 
-    table = np.zeros(
-        (
-            len(extras),
-            len(explainer_extras),
-        )
-    )
+    table = np.zeros((len(extras), len(explainer_extras)))
 
     ray.init(ignore_reinit_error=True)
     env_name = env_creator().metadata["name"]
@@ -647,25 +742,31 @@ def run_compare(agent, memory, feature_names, act_dict, device):
 
     ray.shutdown()
 
-    for i, extra in enumerate(extras):
-        for j, expl in enumerate(explainer_extras):
-            print(f"Computing for {extra=} and {expl=}")
-            outs = compute(
-                net,
-                agent,
-                feature_names,
-                act_dict,
-                extras=extra,
-                explainer_extras=expl,
-                memory=memory,
-                device=device,
-            )
-            table[i, j] = outs[1]
+    finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/tables/table_pred.pkl")
+    for run in range(runs):
+        print(f"{run=}")
+        if f".{env_name}/{memory}/{agent}/run_{run}/tables/table_pred.pkl" in finished:
+            continue
 
-    table = np.array(table)
-    df = pandas.DataFrame(data=table, columns=explainer_extras)
+        for i, extra in enumerate(extras):
+            for j, expl in enumerate(explainer_extras):
+                print(f"Computing for {extra=} and {expl=}")
+                outs = compute(
+                    net,
+                    agent,
+                    feature_names,
+                    act_dict,
+                    run,
+                    extras=extra,
+                    explainer_extras=expl,
+                    memory=memory,
+                    device=device,
+                )
+                table[i, j] = outs[1]
 
-    with open(f".{env_name}/{memory}/{agent}/table_data.txt", "w") as f:
-        f.write(df.to_latex())
+        table = np.array(table)
 
-    return table
+        with open(f".{env_name}/{memory}/{agent}/run_{run}/table_pred.pkl", "wb") as f:
+            pickle.dump(table, f)
+
+    ttest("pred", agent, memory, explainer_extras)
