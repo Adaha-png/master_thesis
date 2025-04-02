@@ -10,7 +10,6 @@ import ray.train.torch
 import supersuit as ss
 import torch
 from dotenv import load_dotenv
-from memories.gtrxl import CustomGTrXLModel
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
@@ -19,6 +18,8 @@ from ray.rllib.models import ModelCatalog
 from ray.rllib.models.torch.recurrent_net import LSTMWrapper as CustomLSTMWrapper
 from ray.tune.registry import register_env
 from torch import nn
+
+from memories.gtrxl import CustomGTrXLModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -35,22 +36,20 @@ def simple_spread_env(config):
 
     N = int(env_kwargs["N"])
 
-    feature_base_names = ["vel x", "vel y", "pos x", "pos y"]
+    feature_base_names = ["Vel x", "Vel y", "Pos x", "Pos y"]
 
-    landmark_feature_names = [f"landmark {i} x" for i in range(1, N + 1)] + [
-        f"landmark {i} y" for i in range(1, N + 1)
+    landmark_feature_names = [f"LM {i} x" for i in range(1, N + 1)] + [
+        f"LM {i} y" for i in range(1, N + 1)
     ]
     landmark_feature_names = [
-        feature
-        for i in range(1, N + 1)
-        for feature in (f"landmark {i} x", f"landmark {i} y")
+        feature for i in range(1, N + 1) for feature in (f"LM {i} x", f"LM {i} y")
     ]
 
     agent_feature_names = [
-        feature for i in range(2, N + 1) for feature in (f"agent {i} x", f"agent {i} y")
+        feature for i in range(2, N + 1) for feature in (f"Agent {i} x", f"Agent {i} y")
     ]
 
-    comms_feature_names = [f"comms {i}" for i in range(1, 5)]
+    comms_feature_names = [f"Comms {i}" for i in range(1, 5)]
 
     feature_names = (
         feature_base_names
