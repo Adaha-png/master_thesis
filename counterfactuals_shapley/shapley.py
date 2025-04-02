@@ -82,15 +82,20 @@ def shap_plot(
         aggregated_shap_values = np.column_stack(aggregated_shap_list)
         aggregated_feature_values = np.column_stack(aggregated_feature_list)
 
-        # Flatten the arrays for scatter plotting:
-        flattened_shap_values = aggregated_shap_values.flatten()
-        repeated_feature_names = np.tile(aggregated_feature_names, X.shape[0])
-        flattened_feature_values = aggregated_feature_values.flatten()
+        mean_shap_values = np.mean(np.abs(aggregated_shap_values), axis=0)
+        top_indices = np.argsort(mean_shap_values)[-12:]
+        top_feature_names = np.array(aggregated_feature_names)[top_indices]
+        top_shap_values = aggregated_shap_values[:, top_indices]
+
+        flattened_shap_values = top_shap_values.flatten()
+        repeated_feature_names = np.tile(
+            top_feature_names, aggregated_feature_values.shape[0]
+        )
+        flattened_feature_values = aggregated_feature_values[:, top_indices].flatten()
 
     else:
-        # Fallback to original behavior: use top 20 features by mean absolute SHAP value.
         mean_shap_values = np.mean(np.abs(shap_values), axis=0)
-        top_indices = np.argsort(mean_shap_values)[-20:]
+        top_indices = np.argsort(mean_shap_values)[-12:]
         top_feature_names = np.array(feature_names)[top_indices]
         top_shap_values = shap_values[:, top_indices]
         flattened_shap_values = top_shap_values.flatten()
@@ -113,7 +118,7 @@ def shap_plot(
     )
 
     # Create a new figure and axis
-    _, ax = plt.subplots(figsize=(8, 12))
+    _, ax = plt.subplots(figsize=(8, 8))
 
     # Scatter plot with color gradient
     scatter = ax.scatter(

@@ -104,6 +104,7 @@ if __name__ == "__main__":
     policy_path = get_policy(
         should_tune=False, new_policy=False, timesteps=2000000, memory=memory
     )
+    crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
     compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
 
     for memry in ["lstm", "attention"]:
