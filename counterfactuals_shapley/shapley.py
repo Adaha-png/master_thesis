@@ -146,5 +146,6 @@ def shap_plot(
     out_dir = f"tex/images/{env.metadata['name']}/{memory}/{agent}"
     os.makedirs(out_dir, exist_ok=True)
     filename = f"{target}_{extras}_{explainer_extras}_shap.pgf".replace(" ", "_")
+    plt.tight_layout()
     plt.savefig(os.path.join(out_dir, filename), backend="pgf")
     plt.close()

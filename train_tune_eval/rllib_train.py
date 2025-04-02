@@ -10,6 +10,7 @@ import ray.train.torch
 import supersuit as ss
 import torch
 from dotenv import load_dotenv
+from memories.gtrxl import CustomGTrXLModel
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
@@ -18,8 +19,6 @@ from ray.rllib.models import ModelCatalog
 from ray.rllib.models.torch.recurrent_net import LSTMWrapper as CustomLSTMWrapper
 from ray.tune.registry import register_env
 from torch import nn
-
-from memories.gtrxl import CustomGTrXLModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
