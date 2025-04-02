@@ -7,15 +7,25 @@
 \usepackage[nottoc]{tocbibind}
 \usepackage[hidelinks]{hyperref}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{amsfonts}
+
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{mathtools}
 \usepackage[printonlyused]{acronym}
 \usepackage{tikz}
 \usepackage{pgfplots} 
+\usepackage{pgf} 
 \usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
 \addbibresource{ref.bib}
 \usetikzlibrary{arrows, arrows.meta, positioning, calc}
 \usepackage{listofitems}
 
+\pgfplotsset{compat=1.18}
+
+\def\mathdefault#1{#1}
+\everymath=\expandafter{\the\everymath\displaystyle}
 
 \title{Explainable Reinforcement Learning}
 \subtitle{Discovering intent based explanations for heterogeneous cooperative multi agent reinforcement learning agents}
@@ -234,17 +244,13 @@ To make sure all methods are understood well its important to make sure we have 
 
 A \ac{mdp} is a framework used to model decision-making in stochastic environments, like we want to in an \ac{rl} task. It is defined by a tuple with 5 elements:
 
-\[
-\mathcal{M} = (\mathcal{S}, \mathcal{A}, P, R, \gamma)
-\]
+$$\mathcal{M} = (\mathcal{S}, \mathcal{A}, P, R, \gamma)$$
 
 where \(\mathcal{S}\) is the set of possible states, \(\mathcal{A}\) is the set of possible actions, \(P(s' | s, a)\) is the transition probability function, which defines the probability of moving to state \(s'\) when action \(a\) is taken in state \(s\), \(R(s, a, s')\) is the reward function that provides a reward for transitioning from state \(s\) to \(s'\) via action \(a\), \(\gamma \in [0,1]\) is the discount factor that determines the importance of future rewards.
 
 The objective in an \ac{mdp} is to find a policy \(\pi(s)\) that maximizes the expected cumulative reward:
 
-\[
-V^\pi(s) = \mathbb{E} \left[ \sum_{t=0}^{\infty} \gamma^t R(s_t, a_t, s_{t+1}) \mid \pi \right]
-\]
+$$V^\pi(s) = \mathbb{E} \left[ \sum_{t=0}^{\infty} \gamma^t R(s_t, a_t, s_{t+1}) \mid \pi \right]$$
 
 where \(V^\pi(s)\) is the value function that represents the expected return starting from state \(s\) and following policy \(\pi\). See figure \ref{fig:rl_basics}.
 
@@ -412,16 +418,10 @@ Another, and perhaps more important, use case is safety. If when online, i.e. th
 \subsubsection{Definition of Intent}
 We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
 
+\section{Explainable Deep Reinforcement Learning: State of the Art and Challenges}
+This paper is a comprehensive survey of the most common state of the art methods applicable to \ac{rl}. Section 4 specifically highlights \ac{xdrl} methods. This subsection will focus on these methods\cite{sota}. This section will serve to give an overview of \ac{xrl} methods that already exist, and if and how I use these methods to develop my own.
 
-\section{Relevant Methods}
-There are several papers written on \ac{xai} and \ac{xrl} problems. Milani et al.\cite{milani2022survey} categorise \ac{xrl} into three main categories, feature importance (FI), learning process and \ac{mdp} (LPM) and Policy-level (PL). FI considers the immediate context for actions, i.e. what part of the input was important for a single action, LPM considers techniques that highlight which experiences in training were influential for the final policy and PL focuses on long term effects and behaviour. Since we are interested in future states and actions we will look at influential trajectories and transitions within these trajectories. It is important to view these transitions in the context of the trajectory to understand the long term effects and not just immediate, which are of less interest in this paper, if we find the state with a high state importance $I(s)$, $I(s) = max_aQ(s,a)-min_aQ(s,a)$ most similar by some similarity measure to an arbitrary current state we could find the resulting trajectory and expect the agent to intend a similar outcome. There are also ways to convert \ac{rnn} policies to an interpretable models post-hoc, which might be relevant if we use an \ac{rnn}. This paper will explore PL explainability further.
-
-In particular "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}, "Explainable Reinforcement Learning via a Causal world model" \cite{yu2024explainable} and "CrystalBox: Future-based explanations for input-driven deep \ac{rl} systems" \cite{patel2024crystalbox} are highly relevant due to the fact that they all describe temporal connections between current actions and future states or actions.
-
-"Are large language models post-hoc explainers" \cite{kroeger2024large} Could be relevant as using other explainers to compare explanations is useful. "ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing \ac{rl} Policies" \cite{gajcin2024acter} 
-
-\subsection{Explainable Deep Reinforcement Learning: State of the Art and Challenges}
-This paper is a comprehensive survey of state of the art methods applicable to \ac{rl}. Section 4 specifically highlights \ac{xdrl} methods. This subsection will focus on these methods.
+\subsection{Feature importance}
 
 \subsubsection{LIME and SP-LIME}
 LIME and SP-LIME are model-agnostic methods that explain chosen actions in specific states by slightly modifying input features and fitting an interpretable linear surrogate model that approximates the behaviour of the model locally. SP-LIME selects a representative set of these explanations to create a global explanation for how the model selects an action. These methods explain what features are important when deciding on an action in a given state.
@@ -432,7 +432,23 @@ Shapley values is a method of computing marginal contributions from cooperative 
 \subsubsection{Layer-wise Relevancy Propagation}
 LRP is a method to assign importance to each node in the network by working backwards from the output to the input. It looks at what nodes in the last hidden layer influenced the output and redistributes prediction scores to these nodes, it then looks at what nodes in the layer before influenced the nodes in the last hidden layer, until you have a complete map of how the network nodes affected each other to produce the output. This method helps reveal hidden patterns in model behaviour.
 
-\subsubsection{}
+\subsection{Policy explanations}
+
+\subsubsection{HIGHLIGHTS}
+This is a intrinsically explainable \ac{rl} algorithm and it works by extracting sub-trajectories with important states, states where a wrong action can lead to significant decreases in reward, to explain how the agent acts in these states. It also provides context in the form of neighbouring states in the important sub-trajectories, in order for users to understand why it chose the trajectory it did.
+
+\subsection{Objective explanations}
+
+
+\subsection{Outcome explanation}
+
+
+\section{Relevant Methods}
+There are several papers written on \ac{xai} and \ac{xrl} problems. Milani et al.\cite{milani2022survey} categorise \ac{xrl} into three main categories, feature importance (FI), learning process and \ac{mdp} (LPM) and Policy-level (PL). FI considers the immediate context for actions, i.e. what part of the input was important for a single action, LPM considers techniques that highlight which experiences in training were influential for the final policy and PL focuses on long term effects and behaviour. Since we are interested in future states and actions we will look at influential trajectories and transitions within these trajectories. It is important to view these transitions in the context of the trajectory to understand the long term effects and not just immediate, which are of less interest in this paper, if we find the state with a high state importance $I(s)$, $I(s) = max_aQ(s,a)-min_aQ(s,a)$ most similar by some similarity measure to an arbitrary current state we could find the resulting trajectory and expect the agent to intend a similar outcome. There are also ways to convert \ac{rnn} policies to an interpretable models post-hoc, which might be relevant if we use an \ac{rnn}. This paper will explore PL explainability further.
+
+In particular "What did you think would happen? Explaining Agent Behaviour through Intended Outcomes" \cite{yau2020did}, "Explainable Reinforcement Learning via a Causal world model" \cite{yu2024explainable} and "CrystalBox: Future-based explanations for input-driven deep \ac{rl} systems" \cite{patel2024crystalbox} are highly relevant due to the fact that they all describe temporal connections between current actions and future states or actions.
+
+"Are large language models post-hoc explainers" \cite{kroeger2024large} Could be relevant as using other explainers to compare explanations is useful. "ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing \ac{rl} Policies" \cite{gajcin2024acter} 
 
 \subsection{What did you think would happen? Explaining Agent Behaviour through Intended Outcomes}
 What did you think would happen describes what an agent expects to happen in future states, and why the current action is chosen based on the future expectations. As stated in the paper, a limitation of their method means it doesn't work well with high dimensionality. The two main difference between this paper and the problem i aim to solve is that they're focusing on an environment with a single agent and that our observation space will be high dimensionality. It uses Q-learning and Markov-chains that train simultaneously with a "belief map" that shows what the agent expects the environment to look like in future states. In the simple examples used in the paper it shows where it believes the taxi should drive and therefore chooses an action to follow this path. This is not directly applicable to my thesis as it's unlikely that Q-learning or Markov chains will be viable for the policy and explainer based on the environment. However the paper is successful in explaining an agents underlying motivations and beliefs about the causal nature of the environment, and using similar methods might be an effective means for making \ac{marl} agents with higher dimensionality understandable from a human perspective. %See Figure \ref{fig:taxi}
@@ -487,12 +503,17 @@ This architecture is tested on domains that require planning such as Sokoban, an
 \medskip
 \chapter{Methodology}
 
-\section{Action importance}
+\section{Critical states}
+In a safety critical real world scenario, like autonomous driving, its important to identify when a vehicle is about to make an important decision, a decision where a mistake could lead to important consequences. If we can identify these states we could make efforts to increase the likelihood of correct action in these states, either by taking over as a human, or improving the policy in these scenarios.
+
+\subsection{Maximum logit difference}
+The output of the policy, in the case of discrete action space, is a vector with size $n$, where $n$ is the amount of possible actions, without an activation function. This is also known as the logit vector. A state in which there is a high difference between the highest logit and the lowest logit means the agent has learned to avoid the action associated with the low logit and prefers the action with the high logit, which would mean the agent associates the high logit action with high future rewards, and the low logit action with low future rewards. If the logits are close to each other it means the agent is either uncertain about which action to choose or indifferent to the different actions in this state. Given that the policy has been trained well enough that it correctly predicts the optimal action in a state, I consider this state to be critical if the difference between the highest logit and the lowest logit is higher than some chosen threshold.
+To compute whether a trajectory contains a critical state I consider the maximum logit difference in each of the states, and assign the maximum of these differences to the trajectory. After computing a value for every trajectory, we consider the median of the values assigned to the trajectories as the threshold for whether a state contains a critical state or not. This means we consider half the trajectories to contain a critical state. The main reason for this is it makes using a baseline of random guesses have expected $50\%$ accuracy. This means if we train a binary classifier with initial observation as input and whether the trajectory contains a critical state as output any improvement over $50\%$ means a network has learned a meaningful connection between the input and the output, as opposed to simply learning that one class is more common than another.
+
 \subsection{Counterfactual sequences}
 \label{sec:counterfactual}
-To discover counterfactual sequences we use the \ac{ea} known as \ac{nsga}. This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
-We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. See figure \ref{fig:pareto_model}. 
-In the case of continuous actions we instead alter actions in multiple timesteps and use a distance measure that we want to minimize. The reward objective is similar to the case of discrete actions. See figure \ref{fig:pareto}.
+In the case of continuous action spaces we cannot look at maximum logit difference, as a policy network doesn't output logits, but rather the actions to choose. To discover counterfactual sequences we use the \ac{ea} known as \ac{nsga}. This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
+We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. 
 
 \begin{algorithm}
 \caption{Fast Non-Dominated Sort}
@@ -606,16 +627,19 @@ By integrating the gradient of the model prediction when going from a specified 
 \end{algorithm}
 
 
-\subsection{Choosing a baseline}
+\subsection{Choosing a feature attribution baseline}
+Both the Shapley value attribution and the Integrated Gradients attribution I use require a baseline. A baseline should represents a neutral, or absence of a value, and needs to be from within the domain that a model is trained on, as a models could behave unpredictably on data outside of their domain, In my case, the environments we used has observation spaces with values in $[0,1]$, meaning that for our baseline we need to choose values in this range. There are several ways to choose a baseline, and each baseline will yield different results. If the domain is a set of images, a common baseline to use is black, or $(0,0,0)$ if the images are represented with RGB values\cite{baseline_bird}. Intuitively, this can be understood as \acp{nn} looking for patterns in an image, which disappear if the image is monochrome.
+In my case, I do not have images, but tabular data. Using $0$ as baseline values is likely not a good choice, as each value when using tabular data represents an interpretable value and $0$ represents a value the model would process as extreme, instead of neutral. Another possibility is choosing the dataset mean as a baseline, which has been used successfully in other \ac{rl} applications, although not \ac{rl} applications with tabular data that I am aware of \cite{baseline_rl}.
+
 
 \section{Extracting intent}
-
 In an environment where the agents successfully reaches a desirable state we can assume that at some point in the trajectory an agents intent is to reach this state. We can train a prediction model on such an environment that uses a certain state or observation as input and outputs features of interest some time in the future. In the example of autonomous vehicles the output could be predicted position of the vehicle at a future point in time. If our prediction model is successful, then it could be considered part of an explanation for the intent of an agent.
 Additionally, we train different models with different sets of inputs to identify what is important to identify intent. We train one model that takes just the observation as input, one that takes observation and action, and one that takes observation and action one hot encoded. While action as an integer and action one hot encoded contains the same amount of information it could be easier for a network to learn correlations with the additional inputs. Looking at the loss curve during training, as well as final loss, this suspicion is confirmed to be true when dealing with a network architecture and environment like we are currently using, 2 fully connected hidden layers with the hyperbolic tangent as the activation, in the environment simple\_spread\_v3. While the input layer for the three prediction models are slightly different the difference in training time is negligible. 
 After 200 epochs the base prediction model reached a evaluation loss of 0.0407, the model with integer action as part of the input reached a evaluation loss of 0.0359 and the model with one-hot encoded action as part of the input reached an evaluation loss of 0.0322. See figure \ref{fig:pred_loss_none}, \ref{fig:pred_loss_action} and \ref{fig:pred_loss_one-hot}. Both the base model and the one-hot action model stagnate long before 200 epochs is reached. If we let the model with integer action as input train for another 50 epochs it does not improve. The test loss for these three models respectively is ... . These graphs and values indicate that while action and an explanation are useful for extracting intent, in the context of our environment and model one-hot values and integrated gradient explanation are the most useful. The difference between using Shapley values and
 
+\section{Temporal information}
 
-\section{LSTM values}
+\subsection{LSTM values}
 An \ac{lstm} cell takes as input a cell state $c_{t-1}$, a hidden state $h_{t-1}$, and an input $X_t$ for each timestep. It outputs a cell state $c_{t}$, a hidden state $h_{t}$ and an output $y_t$. $h_{t-1}$ is concatenated with $X_t$ and then with trainable weight matrices $\textbf{W}$ and biases $b$, $c_t$ and $h_t$ are computed according to the following equations:
 
 \[
@@ -669,34 +693,48 @@ Intuitively, $f_t$ can be viewed as how much of the previous cell state $c_{t-1}
 
 As $c_t$ and $h_t$ are helpful when predicting future actions and states \cite{chung2024predictingfutureactionsreinforcement} when considering the \ac{drc} architecture, I hypothesize that the same holds when using a regular \ac{lstm} layer. See figure \ref{fig:lstm}.
 
-\section{Frame Stacking}
+\subsection{Frame Stacking}
 Frame stacking in \ac{rl} is a technique used to provide an agent with temporal context when tasked with choosing an action by combining the previous $n$ observations into a single input to the policy. In some environments an observation at a single timestep isn't enough to capture the full state. In the case of autonomous vehicles a single observation might not have information on whether a car is standing still or in motion, and the velocity of a car is important to take into account when making an action.
 If we have an observation space of 18, and we want to stack the previous 4 frames to feed into a fully connected input layer to a \ac{nn} we would insted of having the input $o_t$, where $o_t$ is a vector of size 18, we would instead get $$s_t = [o_t, o_{t-1}, o_{t-2}, o_{t-3}]$$ which is a $18\times4$ matrix, which we flatten into a single vector of size 72. If we instead of having a fully connected input layer, have a \ac{cnn} or another architecture that takes spatial context into consideration when processing an input, we would not flatten it.
 Frame stacking does not give the \ac{nn} architecture memory, however it does provide the network with short term temporal context. I hypothesize that for event and state prediction for an agent, having information about previous observations and their transitions is helpful for predicting how the state will change in the future. In the case of autonomous vehicles its natural to assume that knowing the speed of which a vehicle has been moving will be relevant when trying to predict where it will be $n$ steps into the future.
 
+\section{Statistical tests}
+The null hypothesis chosen, $H_0$, is that the method provides no change in expected performance. To confirm that the difference in performance between baseline and our method is statistically significant I performed an independent one-tailed t-test, i.e. I calculated the likelihood that the increase in observed performance, or a higher increase in performance, happened by chance, and not because the true mean of the performance of the developed method is increased from baseline.
+We bootstrapped the full dataset several times, i.e. created new datasets by sampling with replacement from the original datasets, and trained my prediction \acp{nn} 
+on every dataset. From this we get a distribution of performances that we can use to perform a t-test and get a $p$-value. If this $p$-value is lower than a specified threshold value $\alpha$ I consider the result to be statistically significant. I set $\alpha = 0.05$.
+
+
 \chapter{Experiments}
 \section{General experimental setup}
-I have several \acp{nn} for each experiment. The goal is to train them to predict states and events. For the state prediction I initially trained a \ac{nn}, $state_{base}$ to take the observations made by a type of agent from step $n$, $Obs_n$, and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_pos$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
+I have several \acp{nn} for each experiment. The \acp{nn} have two hidden layers of size 64 each, the activation function $tanh$, and outputs either part of the state, $(x,y)$ coordinates for an agent for state prediction, or a single value, whether the trajectory contains a critical state or not, for event prediction. The experiments attempt to test whether my developed methods have an effect on event and state predictions, how impactful these effects are and what contributes to whether the effect is significant or not.I trained them with a scheduler which would divide learning rate by $3$ from an original of $1e-4$, down to a minimum of $1e-6$ whenever the calculated loss on the validation set stopped decreasing.
+\subsection{State prediction neural nets and datasets}
+For the state prediction I initially trained a \ac{nn}, $state_{base}$ to take the observations made by a type of agent from step $n$, $Obs_n$, and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_{pos}$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. Each data point is a pairing of values $(Obs_n, (x_{n+m},y_{n+m}))$. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
 
-I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps. 
-
+\subsection{Event prediction neural nets and datasets}
+I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps, $(Obs_n, crit)$, where $crit$ is a binary value, 0, for non critical states, or 1, for critical states.
 I consider the accuracy of $event_{base}$ and the average error measured in euclidean distance of $state_{base}$ to be the baselines i compare results against in the first experiment. I will train other neural networks.
 
-The \ac{nn} was a fully connected network, had two hidden layers of size 64 each and used the activation function $tanh$. This neural network got an accuracy of $0.8244$ on the test set and the average distance from target was $0.0409$ on the test set. This \ac{nn} is purely a post hoc explainer and used no information about the policy what so ever to explain the agents intention. As aforementioned we want to include information about the policy to discover how we can improve this prediction, and better discover the intent of the agent.
 
-All hyper parameters stayed the same. Only The dataset, and therefore also the input layer, was different between the runs. I trained the networks for a total of $200$ epochs, after which improvement was negligible, if at all existent, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set.
+\subsection{Baseline performance}
+$event_{base}$ got an accuracy of $0.8244$ on the test set and for $state_{base}$ the average distance from target was $0.0409$ on the test set. These \acp{nn} are purely post hoc explainers and used no information about the policy to explain the agents intention. As aforementioned we want to include information about the policy to discover how we can improve this prediction, and better discover the intent of the agent.
 
-I decided to reject all results that showed a relative change of less than $2\%$ when compared to the baseline, as \acp{nn} will always be approximations of the optimal distribution achievable when considering a specific dataset, which means that even in the case of new input having no relevant information we will get some variation in the results. An improvement of $2\%$ or less is not an improvement worth the cost in most scenarios.
+ Only The dataset, and therefore also the input layer, was different between the runs. I trained the networks for a total of $200$ epochs, after which improvement was negligible, if at all existent, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set.
 
 \section{Action and explanation inclusion}
 \subsection{Setup}
 I enhanced both the dataset $D_{pos}$ and $D_{crit}$ with a series of other data. For both datasets I included the action, encoded by an integer from $0$ to $n_{acts}$, i.e. the amount of actions an agent has available, taken at $Obs_n$ for each data point, to use as input for an \ac{nn}. I then trained two \acp{nn} with the same architecture as $state_{base}$ and $event_{base}$ respectively, and once again measured accuracy for the event predictor net with included action, and average error for the state predictor net with included action. If the predictions improved I considered the action to be useful on its own for the predictions in the given environment.
 
+\subsubsection{One-hot and integer inclusion}
 I then one-hot encoded the action, i.e. encoded the action as a $n_{acts}$ dimensional unit vector with a 1 in the chosen action dimension. This includes the same amount of information as represented as an integer, however I hypothesized that the resulting network would achieve higher performance with one-hot encoded actions as the distance between independent actions when one-hot encoding the actions are all the same, as opposed to when encoding the actions as an integer when the distance between two actions is not constant. For example, between the action encoded as the integer 2 and the action encoded as the integer 3 the Manhattan distance is 1, but between the action encoded as the integer 2 and the action encoded as the integer 4 the Manhattan distance is 2. When one-hot encoding these actions the Manhattan distance between two distinct actions will in all cases be 2. As in the previous cases I also trained a \ac{nn} on the datasets enhanced with one hot encoded actions.
 
-After creating datasets with actions encoded different ways I also created two feature importance explanations for the action chosen in each of the initial observations. Shapley values and Integrated gradients were the two methods chosen. I decided on 2 feature importance measures that internally uses different methods of calculation, gradients and SHAP, to explore if they would yield different results. The motivation behind including feature importance explanations is that it describes some if the inner processing of the policy, and might therefore elucidate what kind of actions it might take in future states, and therefore include some of the intent. On each of the previous datasets I created new datasets with these two feature importance methods included.
+\subsubsection{Integrated Gradients and Shapley Value inclusion}
+After creating datasets with actions encoded different ways I also created two feature importance explanations for the action chosen in each of the initial observations. Shapley values and Integrated gradients were the two methods chosen. I decided on 2 feature importance measures that internally uses different methods of calculation, gradients and SHAP, to explore if they would yield different results. The motivation behind including feature importance explanations is that it describes some if the inner processing of the policy, and might therefore elucidate what kind of actions it might take in future states, and therefore include some of the intent. On each of the previous datasets I created new datasets with these two feature importance methods included.\\
 
+\subsubsection{Result presentation}
 In total I trained 18 neural networks per environment, one for each dataset constructed, and compared the results for accuracy on the event prediction networks and the results for average error on the state prediction networks. I repeated this experiment for a few different environments to explore if the results vary depending on environment.
+
+All results are presented in tables, with asterisks marking significance, and italics used for baseline value.
+
 \begin{figure}[!ht]
 	\input{images/simple_spread_v3/no_memory/agent/pred_models/pred_model_action_ig.pgf}
 	\label{fig:pred_loss_action_ig} 
@@ -724,18 +762,22 @@ One-hot & 0.296869 & 0.297798 & 0.288748\\
 When considering the event predictions for the Simple Spread environment the inclusion of explanations make a noticeably increased difference. With misclassifications being reduced from $1 - 0.700933 = 0.299067$ to $1-0.742933=0.257067$ when including actions encoded as one hot vectors. A decrease of $1 - \frac{0.257067}{0.299067} = 1 - 0.859563 \approx 14.04\%$. Which is the smallest improvement of the $7$ methods that improved the predictions by more than $2\%$. See table \ref{tab:crit_simpl}.
 
 \begin{center}
-\captionof{table}{Accuracy for state prediction on the Simple Spread environment without frame stacking}
+\captionof{table}{Accuracy for event prediction on the Simple Spread environment without frame stacking, mean over 10 computations}
 \label{tab:crit_simpl}
 \begin{tabular}{lrrr}
 \toprule
  & No explanation & Integrated Gradients & Shapley Values \\
 \midrule
-    None & 0.700933 & 0.801333 & 0.777867 \\
-    Integer & 0.700700 & 0.800967 & 0.776567 \\
-    One-hot & 0.742933 & 0.800967 & 0.776233 \\
+    No Action & \textit{0.711730} & 0.806637*** & 0.793757*** \\
+Integer & 0.709863 & 0.810210*** & 0.800030*** \\
+One-hot & 0.745763*** & 0.811403*** & 0.792647*** \\
 \bottomrule
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
 \end{center}
+
 
 In the case of state predictions on the Knights Archers Zombies environment the additions of feature importance does not seem to have any important impact as none of the improvements. The inclusion of actions seem to have made an impact on the accuracy of the state prediction, though this decrease in error might just stem from learned knowledge of how an action changes the state, rather than knowledge of how to extract intent from an action. See table \ref{tab:state_kaz}.
 
@@ -811,7 +853,7 @@ For event prediction on the Simple Spread environment with frame stacking the re
 \midrule
 No action & 0.737900 & 0.80300 & 0.756633 \\
 Integer & 0.724767 & 0.804433 & 0.763100 \\
-One-hot & 0.766567 & \textbf{0.812067} & 0.780700 \\
+One-hot & 0.766567 & 0.812067 & 0.780700 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -845,6 +887,10 @@ One-hot & 0.728867 & 0.779600 & 0.742567 \\
 \end{center}
 
 \subsection{Analysis}
+
+\begin{figure}[!ht]
+	\input{images/simple_spread_v3/lstm/agent/0_none_none_shap.pgf}
+\end{figure}
 
 \section{Experiment 3}
 \subsection{Setup}
