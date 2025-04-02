@@ -80,6 +80,9 @@ def simple_spread_env(config):
     env = ss.black_death_v3(env)
     env.reset()
 
+    coords_ind = (2, 3)
+
+    setattr(env, "coords_ind", coords_ind)
     setattr(env, "act_dict", act_dict)
     setattr(env, "feature_names", full_feature_names)
 
@@ -139,6 +142,9 @@ def kaz_env(config):
     env = ss.black_death_v3(env)
     env.reset(seed=config["seed"])
 
+    coords_ind = (1, 2)
+
+    setattr(env, "coords_ind", coords_ind)
     setattr(env, "act_dict", act_dict)
     setattr(env, "feature_names", feature_names)
 
@@ -252,6 +258,8 @@ def run_train(
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
                 algo.save(checkpoint_dir=save_path)
+        if result["env_runners"]["episode_reward_mean"] > -55:
+            break
 
     if tuning:
         algo.save(checkpoint_dir=save_path)

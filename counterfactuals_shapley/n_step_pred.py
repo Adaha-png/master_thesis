@@ -24,7 +24,7 @@ load_dotenv()
 
 def get_new_obs(obs, extras, net, shap, num_acts, n_feats, baseline, memory):
     shap_obs = obs[:n_feats]
-    print(obs)
+
     shap_obs = shap_obs.unsqueeze(0)
 
     if extras == "one-hot":
@@ -33,7 +33,7 @@ def get_new_obs(obs, extras, net, shap, num_acts, n_feats, baseline, memory):
         action_idx = obs[-1].item()
     else:
         if memory == "lstm":
-            net.set_hidden(obs[n_feats:])
+            net.set_hidden(obs)
 
         action_idx = int(torch.argmax(net(shap_obs)))
 
@@ -49,6 +49,7 @@ def get_new_obs(obs, extras, net, shap, num_acts, n_feats, baseline, memory):
 def add_shap(
     net,
     agent,
+    run,
     memory,
     X,
     baseline,
@@ -84,13 +85,13 @@ def add_shap(
 
     if not test:
         with lzma.open(
-            f".{env.metadata['name']}/{memory}/{agent}/{path_ider}/prediction_data_{extras}_shap.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{path_ider}/prediction_data_{extras}_shap.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
     else:
         with lzma.open(
-            f".{env.metadata['name']}/{memory}/{agent}/{path_ider}/test_data_{extras}_shap.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{path_ider}/test_data_{extras}_shap.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -99,7 +100,16 @@ def add_shap(
 
 
 def add_ig(
-    net, agent, memory, X, ig, device, extras="none", save=True, name_ider="pred_data"
+    net,
+    agent,
+    run,
+    memory,
+    X,
+    ig,
+    device,
+    extras="none",
+    save=True,
+    name_ider="pred_data",
 ):
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
@@ -109,15 +119,27 @@ def add_ig(
     env = env_creator()
     n_feats = len(env.feature_names)
     env.close()
-
-    with torch.no_grad():
+    if memory == "lstm":
+        with torch.no_grad():
+            new_X = [
+                numpyfy(
+                    [
+                        *obs,
+                        *ig(
+                            obs[:n_feats],
+                            target=torch.argmax(net.set_hidden(obs)),
+                        ).squeeze(),
+                    ]
+                )
+                for obs in tqdm(X, desc="Adding ig")
+            ]
+    else:
         new_X = [
             numpyfy(
                 [
                     *obs,
                     *ig(
-                        obs[:n_feats],
-                        target=torch.argmax(net.set_hidden(obs)),
+                        obs[:n_feats], target=torch.argmax(net(obs[:n_feats]))
                     ).squeeze(),
                 ]
             )
@@ -126,11 +148,11 @@ def add_ig(
 
     if save:
         os.makedirs(
-            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}",
+            f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}",
             exist_ok=True,
         )
         with lzma.open(
-            f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_{extras}_ig.xz",
+            f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/prediction_data_{extras}_ig.xz",
             "wb",
         ) as f:
             pickle.dump(new_X, f)
@@ -145,7 +167,7 @@ def pred(net, n, device, X):
     return net(X).cpu().detach().numpy()[:, n]
 
 
-def add_action(X, net, agent, memory, device, name_ider="pred_data", save=True):
+def add_action(X, net, agent, run, memory, device, name_ider="pred_data", save=True):
     X = torch.Tensor(X).to(device)
     net = net.to(device)
     n_feats = len(env_creator().feature_names)
@@ -161,8 +183,7 @@ def add_action(X, net, agent, memory, device, name_ider="pred_data", save=True):
                 for obs in tqdm(X, desc="Adding action")
             ]
         except RuntimeError as e:
-            print(e)
-            exit(0)
+            raise e
             new_X = [
                 numpyfy(
                     [
@@ -176,10 +197,11 @@ def add_action(X, net, agent, memory, device, name_ider="pred_data", save=True):
         if save:
             env = env_creator()
             os.makedirs(
-                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+                f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}",
+                exist_ok=True,
             )
             with lzma.open(
-                f".{env.metadata['name']}/{memory}/{agent}/{name_ider}/prediction_data_action.xz",
+                f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/prediction_data_action.xz",
                 "wb",
             ) as f:
                 pickle.dump(new_X, f)
@@ -195,12 +217,13 @@ def one_hot_action(X):
 
 def future_sight(
     agent,
+    run,
     memory,
     device,
     net,
     X,
     y,
-    epochs=300,
+    epochs=200,
     extras="none",
     explainer_extras="none",
     criterion=None,
@@ -213,6 +236,7 @@ def future_sight(
         net,
         memory,
         agent,
+        run,
         X_train,
         y_train,
         X_test,
@@ -229,10 +253,10 @@ def future_sight(
     env_name = env.metadata["name"]
     env.close()
 
-    os.makedirs(f".{env_name}/{memory}/{agent}/{name_ider}", exist_ok=True)
+    os.makedirs(f".{env_name}/{memory}/{agent}/run_{run}/{name_ider}", exist_ok=True)
     torch.save(
         net.state_dict(),
-        f".{env_name}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pt",
+        f".{env_name}/{memory}/{agent}/run_{run}/{name_ider}/pred_model_{extras}_{explainer_extras}.pt",
     )
     return net
 
@@ -255,7 +279,6 @@ def get_future_data(
     env_name = env.metadata["name"]
 
     n_agents = len([ag for ag in env.possible_agents if agent in ag])
-    print(n_agents)
 
     if test:
         training_packs = 1
@@ -294,6 +317,7 @@ def train_net(
     net,
     memory,
     agent,
+    run,
     X_train,
     y_train,
     X_test,
@@ -354,7 +378,10 @@ def train_net(
 
             total_loss += loss.item()
 
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}")
+        print(
+            f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}, LR: {last_lr[0]}                     ",
+            end="\r",
+        )
 
         net.eval()
         with torch.no_grad():
@@ -367,7 +394,6 @@ def train_net(
         scheduler.step(test_loss)
         if scheduler.get_last_lr() != last_lr:
             last_lr = scheduler.get_last_lr()
-            print(f"New lr: {last_lr}")
 
     plt.plot(range(1, (1 + len(eval_loss)), 1), eval_loss)
     plt.xlabel("Epoch")
@@ -376,10 +402,11 @@ def train_net(
     env = env_creator()
 
     os.makedirs(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}", exist_ok=True
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}",
+        exist_ok=True,
     )
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
     )
 
     # Evaluate on test data

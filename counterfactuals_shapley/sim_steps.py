@@ -35,12 +35,13 @@ def sim_steps(net, num_steps, memory, device, seed):
     while not all(done.values()) and i < num_steps:
         criticality = {}
         for agent, obs in observations.items():
+            obs = torch.Tensor(obs).unsqueeze(0).to(device)
             if memory == "no_memory":
-                out = net.forward(torch.Tensor(obs).to(device))
-                actions[agent] = int(np.argmax(out))
+                out = net(obs.cpu())
+                actions[agent] = int(np.argmax(out.cpu()))
 
             elif memory == "lstm":
-                out = net[0](torch.Tensor(obs).unsqueeze(0).to(device))
+                out = net[0](obs)
                 out, _mem = net[1](
                     out,
                     mem.get(agent, mem["default"]),
