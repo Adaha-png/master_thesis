@@ -61,9 +61,11 @@ def simple_spread_env(config):
     )
     full_feature_names = []
     frames = 1
-    for i in range(frames):
-        for name in feature_names:
-            full_feature_names.append(f"{name}, {i}")
+    if frames > 1:
+        for i in range(frames):
+            for name in feature_names:
+                full_feature_names.append(f"{name}, {i}")
+        feature_names = full_feature_names
 
     act_dict = {
         0: "no action",
@@ -84,7 +86,7 @@ def simple_spread_env(config):
 
     setattr(env, "coords_ind", coords_ind)
     setattr(env, "act_dict", act_dict)
-    setattr(env, "feature_names", full_feature_names)
+    setattr(env, "feature_names", feature_names)
 
     return env
 
