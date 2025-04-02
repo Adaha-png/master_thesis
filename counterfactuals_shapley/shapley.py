@@ -73,7 +73,7 @@ def shap_plot(
             end = slices[j]
             aggregated_shap = np.sum(shap_values[:, start:end], axis=1)
             aggregated_feature = np.sum(X[:, start:end], axis=1)
-            combined_name = f"{feature_names[start]} to {feature_names[end-1]}"
+            combined_name = feature_names[start].split(" ")[-1]
             aggregated_shap_list.append(aggregated_shap)
             aggregated_feature_list.append(aggregated_feature)
             aggregated_feature_names.append(combined_name)
@@ -137,7 +137,7 @@ def shap_plot(
     # Draw vertical line at x=0
     ax.axvline(0, color="gray", linestyle="-", linewidth=0.5)
     ax.set_ylabel("Feature")
-    ax.set_xlabel("Shapley Value")
+    ax.set_xlabel("Feature")
 
     # Add a color bar for feature values
     cbar = plt.colorbar(scatter, ax=ax)
