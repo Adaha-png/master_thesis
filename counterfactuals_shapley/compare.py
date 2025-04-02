@@ -640,7 +640,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
         slices.append(len(feature_names))
 
     if extras == "action":
-        feature_names.append("action")
+        feature_names.append("Action")
         slices.append(len(feature_names))
     elif extras == "one-hot":
         feature_names.extend(env.act_dict.keys())
@@ -649,7 +649,7 @@ def make_plots(explainer, X, agent, memory, extras, explainer_extras):
     if explainer_extras != "none":
         feature_names.extend(
             [
-                feature_name + " " + explainer_extras
+                feature_name + " " + explainer_extras.upper()
                 for feature_name in env.feature_names
             ]
         )
