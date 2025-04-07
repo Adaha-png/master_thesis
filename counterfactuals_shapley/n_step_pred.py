@@ -397,7 +397,6 @@ def train_net(
     plt.plot(range(1, 1 + len(eval_loss), 1), eval_loss)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title("Loss on evaluation set during training")
     env = env_creator()
 
     os.makedirs(
@@ -408,6 +407,12 @@ def train_net(
     plt.savefig(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
     )
+
+    with open(
+        f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/{extras}_{explainer_extras}_train_eval_loss.pkl",
+        "wb",
+    ) as f:
+        pickle.dump(eval_loss, f)
 
     env.close()
     # Evaluate on test data
@@ -420,3 +425,64 @@ def train_net(
         print(f"Test Loss: {test_loss}")
 
     return net
+
+
+def plot_losses(action_expl_pair_list, memory, agent, run, name_ider):
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "pgf.texsystem": "pdflatex",
+            "text.usetex": True,
+            "pgf.rcfonts": False,
+        }
+    )
+
+    env = env_creator()
+    all_evals = []
+    legends = []
+
+    # Load evaluation losses and construct corresponding legend labels.
+    for pair in action_expl_pair_list:
+        extras = pair[0]
+        explainer_extras = pair[1]
+        legend_id = ""
+        if extras == "none":
+            legend_id += "No action"
+        elif extras == "action":
+            legend_id += "Integer"
+        elif extras == "one-hot":
+            legend_id += "One-hot"
+
+        legend_id += " and "
+
+        if explainer_extras == "none":
+            legend_id += "No explanation"
+        elif explainer_extras == "ig":
+            legend_id += "IG"
+        elif explainer_extras == "shap":
+            legend_id += "Shapley"
+
+        legends.append(legend_id)
+
+        file_path = f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/{extras}_{explainer_extras}_train_eval_loss.pkl"
+        with open(file_path, "rb") as f:
+            eval_loss = pickle.load(f)
+        all_evals.append(eval_loss)
+
+    env.close()
+
+    # Create a new figure for plotting
+    plt.figure(figsize=(8, 6))
+
+    # Plot each loss curve with its corresponding label.
+    for eval_loss, label in zip(all_evals, legends):
+        plt.plot(range(1, 1 + len(eval_loss)), eval_loss, label=label)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.tight_layout()  # Adjust layout to prevent clipping of labels/legend
+    plt.savefig(
+        f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/losses_plot.pgf",
+        backend="pgf",
+    )
