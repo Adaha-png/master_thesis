@@ -147,36 +147,19 @@ def extract_pairs_from_histories(histories, agent_name, memory, m, n=None):
     return np.array(initial_observations), np.array(later_observations)
 
 
-def get_torch_from_algo(algo, agent, memory, logits=False):
+def get_torch_from_algo(algo, agent, memory):
     policy_net = algo.get_policy(policy_id=agent).model
 
     if memory == "no_memory":
-        if logits:
-            net = nn.Sequential(policy_net._hidden_layers, policy_net._logits)
-
-        else:
-            net = nn.Sequential(
-                policy_net._hidden_layers,
-                policy_net._logits,
-                nn.Softmax(dim=0),
-            )
+        net = nn.Sequential(policy_net._hidden_layers, policy_net._logits)
         return net
 
     elif memory == "lstm":
-        if logits:
-            return (
-                policy_net._hidden_layers,
-                policy_net.lstm,
-                policy_net._logits_branch,
-            )
-
-        else:
-            return (
-                policy_net._hidden_layers,
-                policy_net.lstm,
-                policy_net._logits_branch,
-                nn.Softmax(dim=0),
-            )
+        return (
+            policy_net._hidden_layers,
+            policy_net.lstm,
+            policy_net._logits_branch,
+        )
 
     else:
         return NotImplementedError
@@ -245,9 +228,17 @@ def compute(
             f".{env_name}/{memory}/{agent}/run_{run}/pred_data/prediction_data.xz", "rb"
         ) as f:
             X, y = pickle.load(f)
+
     n_feats = len(env.feature_names)
-    if memory != "no_memory":
-        out_layers = nn.Sequential(*net[2:])
+
+    net_list = None
+    net_log = copy.deepcopy(net)
+    if memory == "no_memory":
+        net = nn.Sequential(net, nn.Softmax())
+
+    elif memory == "lstm":
+        net_list = copy.deepcopy(net)
+        out_layers = (net[2], nn.Softmax())
         net = OneStepLSTM(
             inp_layers=net[0],
             lstm=net[1],
@@ -413,6 +404,7 @@ def compute(
             pred_net,
             X,
             y,
+            epochs=300,
             extras=extras,
             explainer_extras=explainer_extras,
         )
@@ -447,7 +439,7 @@ def compute(
             path = f".{env_name}/{memory}/prediction_test_data.xz"
             if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
                 get_future_data(
-                    net,
+                    net_list or net_log,
                     memory,
                     agent,
                     device,
@@ -698,8 +690,6 @@ def ttest(name_ider, agent, memory, explainer_extras):
         full_table,
         axis=0,
     )
-
-    print(f"{mean_table=}")
 
     with open(f".{env_name}/{memory}/{agent}/table_{name_ider}_mean.txt", "w") as f:
         df = pandas.DataFrame(data=mean_table, columns=explainer_extras)

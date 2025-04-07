@@ -15,11 +15,8 @@ from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.rllib.models import ModelCatalog
-from ray.rllib.models.torch.recurrent_net import LSTMWrapper as CustomLSTMWrapper
 from ray.tune.registry import register_env
 from torch import nn
-
-from memories.gtrxl import CustomGTrXLModel
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -100,6 +97,7 @@ def kaz_env(config):
         max_arrows=10,
         max_cycles=900,
         vector_state=True,
+        render_mode="rgb_array",
     )
 
     ents = ["num_archers", "num_knights", "num_swords", "max_arrows", "max_zombies"]
@@ -199,12 +197,6 @@ def run_train(
             "max_seq_len": 20,
         }
 
-    elif memory == "attention":
-        ModelCatalog.register_custom_model("custom_gtrxl", CustomGTrXLModel)
-        model_dict = {
-            "custom_model": "custom_gtrxl",
-        }
-
     config = (
         PPOConfig()
         .environment(
@@ -258,7 +250,7 @@ def run_train(
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
                 algo.save(checkpoint_dir=save_path)
-        if result["env_runners"]["episode_reward_mean"] > -55:
+        if result["env_runners"]["episode_reward_mean"] > -50:
             break
 
     if tuning:
@@ -355,4 +347,4 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    record_episode(memory="lstm")
+    record_episode(memory="no_memory")

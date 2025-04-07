@@ -121,7 +121,6 @@ def shap_plot(
         }
     )
 
-    # Create a new figure and axis
     _, ax = plt.subplots(figsize=(6, 9))
 
     # Scatter plot with color gradient

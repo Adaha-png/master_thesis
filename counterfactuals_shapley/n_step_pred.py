@@ -183,7 +183,6 @@ def add_action(X, net, agent, run, memory, device, name_ider="pred_data", save=T
                 for obs in tqdm(X, desc="Adding action")
             ]
         except RuntimeError as e:
-            raise e
             new_X = [
                 numpyfy(
                     [
@@ -223,7 +222,7 @@ def future_sight(
     net,
     X,
     y,
-    epochs=200,
+    epochs=300,
     extras="none",
     explainer_extras="none",
     criterion=None,
@@ -323,7 +322,7 @@ def train_net(
     X_test,
     y_test,
     device,
-    epochs=100,
+    epochs=300,
     batch_size=64,
     extras="none",
     explainer_extras="none",
@@ -353,7 +352,6 @@ def train_net(
 
     # Training loop
     last_lr = scheduler.get_last_lr()
-    print(f"lr = {last_lr}")
     net.train()
     eval_loss = []
 
@@ -395,27 +393,29 @@ def train_net(
         if scheduler.get_last_lr() != last_lr:
             last_lr = scheduler.get_last_lr()
 
-    plt.plot(range(1, (1 + len(eval_loss)), 1), eval_loss)
+    plt.clf()
+    plt.plot(range(1, 1 + len(eval_loss), 1), eval_loss)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Loss on evaluation set during training")
     env = env_creator()
 
     os.makedirs(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}",
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}",
         exist_ok=True,
     )
+
     plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
     )
 
+    env.close()
     # Evaluate on test data
     net.eval()
     with torch.no_grad():
         test_outputs = net(X_test)
         if len(y_test.shape) == 1:
             y_test = y_test.unsqueeze(1)
-        print(y_test.shape)
         test_loss = criterion(test_outputs, y_test).item()
         print(f"Test Loss: {test_loss}")
 

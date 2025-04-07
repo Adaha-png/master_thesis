@@ -102,18 +102,20 @@ if __name__ == "__main__":
 
     memory = "no_memory"
     policy_path = get_policy(
-        should_tune=False, new_policy=False, timesteps=2000000, memory=memory
+        should_tune=False, new_policy=False, timesteps=20000000, memory=memory
     )
-    crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
-    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
 
-    for memry in ["lstm", "attention"]:
+    # compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
+    crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
+
+    for memry in ["lstm"]:
         policy_path = get_policy(
             should_tune=False,
             new_policy=False,
             timesteps=20000000,
             memory=memry,
         )
+
         ray.init(ignore_reinit_error=True)
         env_name = env_creator().metadata["name"]
 
