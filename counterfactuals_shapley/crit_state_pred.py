@@ -51,7 +51,7 @@ def get_crit_data(histories, agent, m):
         if len(history) < m:  # Skip histories that are too short
             continue
 
-        n = np.random.randint(0, len(history) - m)
+        n = np.random.randint(0, len(history) - m - 1)
         history = {
             name: np.array([step[name] for step in history])
             for name in history[0]
@@ -60,7 +60,7 @@ def get_crit_data(histories, agent, m):
 
         for sequence in history.values():
             X.append(sequence[n]["observation"])
-            diff = find_crit_state(sequence[n : n + m])
+            diff = find_crit_state(sequence[n + 1 : n + m + 1])
 
             diff_vals.append(diff)
 
@@ -142,7 +142,7 @@ def compute(
 
     elif memory == "lstm":
         net_list = copy.deepcopy(net)
-        out_layers = (net[2], nn.Softmax())
+        out_layers = nn.Sequential(net[2], nn.Softmax())
         net = OneStepLSTM(
             inp_layers=net[0],
             lstm=net[1],
