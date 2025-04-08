@@ -423,6 +423,7 @@ This paper is a comprehensive survey of the most common state of the art methods
 
 \subsection{Feature importance}
 
+
 \subsubsection{LIME and SP-LIME}
 LIME and SP-LIME are model-agnostic methods that explain chosen actions in specific states by slightly modifying input features and fitting an interpretable linear surrogate model that approximates the behaviour of the model locally. SP-LIME selects a representative set of these explanations to create a global explanation for how the model selects an action. These methods explain what features are important when deciding on an action in a given state.
 
@@ -503,6 +504,7 @@ This architecture is tested on domains that require planning such as Sokoban, an
 \chapter{Methodology}
 This chapter will elaborate on the methods I will use to perform the experiments. Firstly, in section \ref{sec:event_state_meth}, I will discuss in detail the state and events we want to predict. Then, in section \ref{sec:feat_imp_meth}, I will elucidate how i attribute importance to observation features. After that, in section \ref{sec:intent_meth}, I will define what I mean by intent for an agent in a \ac{rl} setting. Then, in section \ref{sec:temp_meth}, I will discuss what temporal information I will use and how to get it. Then, in section \ref{sec:stat_meth}, I will discuss what statistical tests I perform to validate my results. Lastly, in section \ref{sec:env_meth}, I will elaborate on what environments I perform the experiments on, and how these environments are structured.
 
+
 \section{Event and State prediction}
 \label{sec:event_state_meth}
 For the state prediction part of the experiments I will attempt to improve predictions on x and y coordinates of an agent a given time into the future. 
@@ -515,6 +517,22 @@ In a safety critical real world scenario, like autonomous driving, its important
 \subsection{Maximum logit difference}
 The output of the policy, in the case of discrete action space, is a vector with size $n$, where $n$ is the amount of possible actions, without an activation function. This is also known as the logit vector. A state in which there is a high difference between the highest logit and the lowest logit means the agent has learned to avoid the action associated with the low logit and prefers the action with the high logit, which would mean the agent associates the high logit action with high future rewards, and the low logit action with low future rewards. If the logits are close to each other it means the agent is either uncertain about which action to choose or indifferent to the different actions in this state. Given that the policy has been trained well enough that it correctly predicts the optimal action in a state, I consider this state to be critical if the difference between the highest logit and the lowest logit is higher than some chosen threshold.
 To compute whether a trajectory contains a critical state I consider the maximum logit difference in each of the states, and assign the maximum of these differences to the trajectory. After computing a value for every trajectory, we consider the median of the values assigned to the trajectories as the threshold for whether a state contains a critical state or not. This means we consider half the trajectories to contain a critical state. The main reason for this is it makes using a baseline of random guesses have expected $50\%$ accuracy. This means if we train a binary classifier with initial observation as input and whether the trajectory contains a critical state as output any improvement over $50\%$ means a network has learned a meaningful connection between the input and the output, as opposed to simply learning that one class is more common than another.
+
+\begin{gather*}
+    \mathbf{z_i}(x) = \left[z_{i,1}(x),\, z_{i,2}(x),\, \dots,\, z_{i,K}(x)\right]\\
+    z_{i,\max}(x) = \max_{j \in \{1,\dots,K\}} z_{i,j}(x)\\
+    z_{i,\min}(x) = \min_{j \in \{1,\dots,K\}} z_{i,j}(x)\\
+\Delta(x_i) = z_{i,\max}(x) - z_{i,\min}(x)\\
+\Delta(x) = \max{\Delta(x_0),\Delta(x_1), \dots, \Delta(x_K)}
+\end{gather*}
+
+\begin{equation}
+\label{eq:crit_criterion}
+\Delta(x) > \tau
+\end{equation}
+
+where $z_{i,j}$ is output $j$ of policy $\pi_\theta$ in state $i$, \ref{eq:crit_criterion} is the criterion for marking a sub-trajectory as containing a critical state, and $\tau$ is the threshold for said equation.
+
 
 \subsection{Counterfactual sequences}
 \label{sec:counterfactual}
@@ -562,8 +580,11 @@ We use multi objective search because we want to minimize action change while ma
 
 \section{Feature importance}
 \label{sec:feat_imp_meth}
+I decided to experiment on whether including feature importance could improve the event and state predictions. The methods used to attribute importance to features were SHAP described in section \ref{sec:shap_meth}, and Integrated Gradients described in section \ref{sec:intgrad}. This section also describes how I decided on choosing baseline values for these methods.
+I can use these methods either on logit output or on softmax values with different intentions. If I use the methods on the softmax values I get insight into what affects the confidence of the policy, while if I use them on logit output it better reflects the policy networks inner workings, as in my case, the policy network outputs logits and not softmax scores.
 
 \subsection{Shapley values for observations}
+\label{sec:shap_meth}
 The Shapley value is an idea from cooperative game theory where it was used to measure the contribution of each player to the total outcome. It has been adapted to deep reinforcement learning where each feature is considered a player and the policy is considered a game. In our case we initially want to use it to explain actions so we consider that to be the outcome of the game. The Shapley value is calculated by taking each feature and finding the marginal contribution, i.e. seeing how the prediction changes when you include the feature and compare the outcome to when it wasn't included, you do this over all possible coalitions of features. See algorithm \ref{alg:shapley}.
 The Shapley value has a computational complexity of $O(2^n)$, and because of this we often use estimates instead of exact Shapley values. There are two main ways of reducing the complexity. The first one is using a surrogate model instead of the policy to reduce the number of features, and the second is reducing the number of coalitions. In our case we reduce the number of coalitions to some number $2^K$ and use K-means clustering to increase representability and reduce variance.
 Since we have forward passes of the policy, and each can be considered one example of a game we sample the games and use the average marginal contribution over all the games instead of just one game.
@@ -737,11 +758,15 @@ $$\text{Reject } H\_0 \quad \text{if} \quad p < \alpha$$
 
 \section{Environments}
 \label{sec:env_meth}
+For a better understanding of what state and event predictions refer to in my experiments, it is important to understand what type of environments the methods to extract states events are used in. In section \ref{sec:simpl_env} we describe the Simple Spread environment and in section \ref{sec:kaz_env} we describe the Knights Archers Zombies environment.
 
 \subsection{Simple Spread}
+\label{sec:simpl_env}
 In the Simple Spread environment there are $n$ agents, and $n$ landmarks. Simple spread is a cooperative environment where the goal of an agent is for all the agents to reach a landmark, without colliding with the other agents. The agents are modeled as circles and the landmarks as dots. This environment was chosen partially for its simplicity, and the intuitive understanding of what features humans would consider important in such a setting. Developing our methods for this environment should also be relatively efficient due to the observation space of size 18, which is smaller than most other PettingZoo environments, and as such training the prediction \acp{nn} and calculation of feature importance is less computationally expensive. The global reward, $R_g$, is the negative total distance from each landmark to the closest agent measured with euclidean distance and the local reward, $R_l$, is $-1$ for every agent a given agent is colliding with.
 
 Both continuous and discrete actions are available, I went with discrete. In the discrete action space each agent has the ability to idle, move up, move down, move left, or move right. I used $n=3$ and local ratio $0.5$, i.e. the reward, $R$, for an agent is $R = 0.5\times R_g + 0.5\times R_l$. See figure \ref{fig:simple_spread_env}
+
+A critical state are states where the agents actions strongly impact returns. As returns are correlated with rewards a critical state is likely a state where agents might collide or make significant progress on getting closer to the landmark.
 
 \begin{figure}[!ht]
     \centering
@@ -751,9 +776,12 @@ Both continuous and discrete actions are available, I went with discrete. In the
 \end{figure}
 
 \subsection{Knights Archers Zombies}
+\label{sec:kaz_env}
 The KAZ environment has a maximum of $n$ archers, a maximum of $m$ knights, and a maximum number of zombies $k$. The environment initializes with $n$ archers, $m$ knights and 0 zombies. The goal is for the archers and knights to kill zombies. Zombies spawn at the top border, at a set spawn rate, and travel down the screen moving randomly to the left or right. If an archer hits a zombie with an arrow it gets a reward of 1, and if a knight hits a zombie with a mace it gets a reward of 1. Once a zombie gets hit it dies. If a zombie collides with an agent the agent dies. The game ends once all agents are dead, a zombie reaches the bottom of the screen or some max length is reached.
 
 For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The action space is discrete and allows the agents to idle, move forward, rotate clockwise, rotate counter clockwise, and attack. The observation space is either image based or vector based. I will use vector based for my experiments, which makes it a size of 135. See figure \ref{fig:kaz_env}
+
+In the Knights Archers Zombies environment a critical state might be a state where an agent could die or is about to shoot an arrow that might kill a zombie, as these states are associated with changes in returns, immediate in the case of killing a zombie and delayed lower returns in the case of dying as an agent, as this does not incur a penalty, but it does make the agent unable to gain future rewards.
 
 \begin{figure}[!ht]
     \centering
@@ -762,7 +790,48 @@ For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The
     \label{fig:kaz_env}
 \end{figure}
 
+\section{Policy creation}
+This section will describe the details of how we create the policies for the environments.
+
+\subsection{Reinforcement learning library}
+There are a lot of options when deciding what library to use when designing \ac{rl} policies. I decided to use the library RLlib by Ray. The main benefits of this library is ease of implementation when working on heterogeneous agents, as each type of agent requires a specifically trained network to perform well. It also has scalability \cite{rayrllib}. It is required to train several policies for the creation of this thesis, therefore scalability when optimizing a policy is helpful.
+
+\subsection{Policy construction}
+I used a \ac{ppo} algorithm when optimizing my policy, because this method outperforms other algorithms in several environments in the continuous observation domain \cite{schulman2017proximalpolicyoptimizationalgorithms}, as well as the fact that is it applicable to \ac{marl} systems. The policy architecture consisted of an input layer with the observation of the environment as the size, two hidden layers of size 64, the hyperbolic tangent function, see \ref{eq:tanh}, colloquially known as tanh as the hidden layer activation function. This function is used for its "s-shape", bounding values from $y=-1$ to $y=1$, see figure \ref{fig:tanh}. The output layer has the size of the action space of the agent.
+
+\begin{equation}
+\label{eq:tanh}
+tanh(x) = \frac{e^x-e^{-x}}{e^x+e^{-x}}
+\end{equation}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    xlabel={$x$},
+    ylabel={$\tanh x$},
+    domain=-4:4,
+    samples=100,
+    grid=both,
+    axis lines=middle,
+    width=10cm,
+    height=6cm,
+    enlargelimits,
+  ]
+    \addplot[blue, very thick] {tanh(x)};
+  \end{axis}
+\end{tikzpicture}
+\caption{Graph showing the hyperbolic tangent function}
+\label{fig:tanh}
+\end{figure}
+
+\subsection{Training}
+The training was done with a batch size of 1024, for stability, learning rate and gamma was automatically tuned for the policies in the Knights Archers Zombies environments, but set to $1e-4$ and $0.8$ in the Simple Spread environment as i found these to reach close to a global optimum for every variation of the environment I trained on, e.g. with or without frame stacking.
+
+
 \chapter{Experiments}
+This chapter will discuss the details on how i perform the experiments, as well as discussing and analyzing the results of these experiments. The experiment described in \ref{sec:exp_1} will be about detecting the effects of actions and feature importance and their ability to elucidate the intent of a policy as aforementioned, the experiment described in \ref{sec:exp_2} explores if and how temporal information can be used to explain the intent of a policy, and the experiments described in \ref{sec:exp_3} explores how to alter the event and state prediction networks to improve predictions.
+
 \section{General experimental setup}
 I have several \acp{nn} for each experiment. The \acp{nn} have two hidden layers of size 64 each, the activation function $tanh$, and outputs either part of the state, $(x,y)$ coordinates for an agent for state prediction, or a single value, whether the trajectory contains a critical state or not, for event prediction. The experiments attempt to test whether my developed methods have an effect on event and state predictions, how impactful these effects are and what contributes to whether the effect is significant or not.I trained them with a scheduler which would divide learning rate by $3$ from an original of $1e-4$, down to a minimum of $1e-6$ whenever the calculated loss on the validation set stopped decreasing. All training was stopped after 200 epochs.
 
@@ -770,7 +839,7 @@ I have several \acp{nn} for each experiment. The \acp{nn} have two hidden layers
 For the state prediction I initially trained a \ac{nn}, $state_{base}$ to take the observations made by a type of agent from step $n$, $Obs_n$, and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_{pos}$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. Each data point is a pairing of values $(Obs_n, (x_{n+m},y_{n+m}))$. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
 
 \subsection{Event prediction neural nets and datasets}
-I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $5$ steps, $(Obs_n, crit)$, where $crit$ is a binary value, 0, for non critical states, or 1, for critical states.
+I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section placeholder. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $4$ steps, $(Obs_n, crit)$, where $crit$ is a binary value, 0, for non critical states, or 1, for critical states.
 I consider the accuracy of $event_{base}$ and the average error measured in euclidean distance of $state_{base}$ to be the baselines i compare results against in the first experiment. I will train other neural networks.
 
 
@@ -780,8 +849,13 @@ $event_{base}$ got an accuracy of $0.8244$ on the test set and for $state_{base}
  Only The dataset, and therefore also the input layer, was different between the runs. I trained the networks for a total of $200$ epochs, after which improvement was negligible, if at all existent, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set.
 
 \section{Action and explanation inclusion}
-\subsection{Setup}
+\label{sec:exp_1}
+As aforementioned this experiment explores how including action and explanations improves event and state predictions on the Simple Spread and Knights Archers Zombies environment.
+
+\subsection{setup}
 I enhanced both the dataset $D_{pos}$ and $D_{crit}$ with a series of other data. For both datasets I included the action, encoded by an integer from $0$ to $n_{acts}$, i.e. the amount of actions an agent has available, taken at $Obs_n$ for each data point, to use as input for an \ac{nn}. I then trained two \acp{nn} with the same architecture as $state_{base}$ and $event_{base}$ respectively, and once again measured accuracy for the event predictor net with included action, and average error for the state predictor net with included action. If the predictions improved I considered the action to be useful on its own for the predictions in the given environment.
+
+This section will go into detail on how i included actions and explanations.
 
 \subsubsection{One-hot and integer inclusion}
 I then one-hot encoded the action, i.e. encoded the action as a $n_{acts}$ dimensional unit vector with a 1 in the chosen action dimension. This includes the same amount of information as represented as an integer, however I hypothesized that the resulting network would achieve higher performance with one-hot encoded actions as the distance between independent actions when one-hot encoding the actions are all the same, as opposed to when encoding the actions as an integer when the distance between two actions is not constant. For example, between the action encoded as the integer 2 and the action encoded as the integer 3 the Manhattan distance is 1, but between the action encoded as the integer 2 and the action encoded as the integer 4 the Manhattan distance is 2. When one-hot encoding these actions the Manhattan distance between two distinct actions will in all cases be 2. As in the previous cases I also trained a \ac{nn} on the datasets enhanced with one hot encoded actions.
@@ -795,13 +869,14 @@ In total I trained 18 neural networks per environment, one for each dataset cons
 All results are presented in tables, with asterisks marking significance, and italics used for baseline value.
 
 \begin{figure}[!ht]
-	\input{images/simple_spread_v3/no_memory/agent/run_0/crit_models/pred_model_action_ig.pgf}
-	\label{fig:pred_loss_action_ig} 
+	\input{images/simple_spread_v3/no_memory/agent/crit_models/pred_model_none_ig.pgf}
+	\label{fig:pred_loss_n_ig} 
 \end{figure}
+
 
 \subsection{Results}
 
-On state predictions for the Simple Spread environment, the methods I developed are not shown to be an improvement over baseline. It is likely that in the case of predicting positions the observation alone is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require longer training time, or a larger network. I will investigate this further in experiment 3.
+On state predictions for the Simple Spread environment, the methods I developed are not shown to be an improvement over baseline. It is likely that in the case of predicting positions the observation alone is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require longer training time, or a larger network. I will investigate this further in experiment.
 
 \begin{center}
 \captionof{table}{Average error for state prediction on the Simple Spread environment without frame stacking, mean over 10 computations}
@@ -882,7 +957,7 @@ In all figures for feature value attribution on the event prediction and state p
 For event prediction in the simple spread environment, we can see that the placement of the landmarks is gets the highest mean of feature attribution values for predicting whether an agent will encounter a critical state or not. Interestingly, with the exception of comms, which were turned off so they are expected to be irrelevant for predicting events, the features with the lowest attributed values were all current agent positions. Since the rewards are structured so that collisions between agents are penalized, it would be natural to expect that positions would be important when considering large differences in logits, that does however not seem to be the case, especially interesting is that the agents own position is the least influential factor when predicting whether the agent is about to encounter a critical state. Intuitively you could consider the position of the landmarks to be important as two landmarks in close proximity to each other might be challenging to reach by two separate agents without those agents colliding with each other. Figure \ref{fig:event_simpl_shap} Shapley value attribution on one baseline event prediction \ac{nn}.
 
 \begin{center}
-\begin{figure}[!ht]
+\begin{figure}[h]
 \label{fig:event_simpl_shap}
 \input{images/simple_spread_v3/no_memory/agent/None_none_none_shap.pgf}
 \caption{Shapley Values on event prediction in the Simple Spread environment without included action or explanation. LM = Landmark, Vel = Velocity, Pos = Position.}
@@ -895,7 +970,7 @@ When including integrated gradients and action encoded as an integer for input t
 the explanation especially is for the predictions. In figure \ref{fig:event_simpl_ig_shap} the Shapley values for the integrated gradients have been aggregated together to capture the importance of the entire explanation instead the influence of the explanation of each feature, which would be overshadowed by the observation of the agents importance. From the figure we can see that of the 50 instances plotted the explanation is, even in the case of the lowest Shapley value, more influential in predicting that the agent is about to encounter a critical state that any of the regular observations, even the instances with the highest attribution for regular observation values. This is not the case for predicting when the agent is not about to encounter a critical state, though the mean is still significantly more influential than the most influential instances of regular observations. Compared to the case in figure \ref{fig:event_simpl_shap} the variance in importance for observation features is reduced, and the order of the magnitudes seems arbitrary.
 
 \begin{center}
-\begin{figure}[!ht]
+\begin{figure}[h]
 \label{fig:event_simpl_ig_shap}
 \input{images/simple_spread_v3/no_memory/agent/None_action_ig_shap.pgf}
 \caption{Shapley Values on event prediction in the Simple Spread environment with included action represented as an integer, and Aggregated shapley values for Integrated Gradients explanations. IG = Integrated Gradients, LM = Landmark, Vel = Velocity, Pos = Position.}
@@ -903,6 +978,7 @@ the explanation especially is for the predictions. In figure \ref{fig:event_simp
 \end{center}
 
 \section{Memory inclusion}
+\label{sec:exp_2}
 
 \subsection{Setup}
 
@@ -977,6 +1053,8 @@ One-hot & 0.728867 & 0.779600 & 0.742567 \\
 \subsection{Analysis}
 
 \section{Hyperparameter Exploration}
+\label{sec:exp_3}
+
 \subsection{Setup}
 \subsection{Results}
 \subsection{Analysis}

@@ -1,3 +1,4 @@
+import copy
 import glob
 import lzma
 import os
@@ -66,11 +67,9 @@ def get_crit_data(histories, agent, m):
     # Convert to numpy arrays
     X = np.array(X)
     diff_vals = np.array(diff_vals)
-    print(diff_vals)
-    # Determine threshold (75th percentile of diff values)
+
     threshold = np.quantile(diff_vals, 0.5)
 
-    # Label each initial observation as critical (1) or non-critical (0)
     Y = (diff_vals > threshold).astype(int)
     return X, Y
 
@@ -136,8 +135,14 @@ def compute(
             X, y = pickle.load(f)
 
     n_feats = len(env.feature_names)
-    if memory != "no_memory":
-        out_layers = nn.Sequential(*net[2:])
+    net_list = None
+    net_log = copy.deepcopy(net)
+    if memory == "no_memory":
+        net = nn.Sequential(net, nn.Softmax())
+
+    elif memory == "lstm":
+        net_list = copy.deepcopy(net)
+        out_layers = (net[2], nn.Softmax())
         net = OneStepLSTM(
             inp_layers=net[0],
             lstm=net[1],
@@ -291,7 +296,7 @@ def compute(
             X,
             y,
             extras=extras,
-            epochs=200,
+            epochs=300,
             explainer_extras=explainer_extras,
             criterion=nn.BCELoss(),
             name_ider="crit_models",
@@ -323,7 +328,7 @@ def compute(
             path = f".{env_name}/{memory}/prediction_test_data.xz"
             if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
                 get_future_data(
-                    net,
+                    net_list or net_log,
                     memory,
                     agent,
                     device,
@@ -499,7 +504,7 @@ def crit_compare(agent, memory, feature_names, act_dict):
 
     algo = PPO.from_checkpoint(policy_path)
 
-    net = get_torch_from_algo(algo, agent, memory, logits=True)
+    net = get_torch_from_algo(algo, agent, memory)
 
     finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/tables/table_crit.pkl")
     for run in range(runs):
