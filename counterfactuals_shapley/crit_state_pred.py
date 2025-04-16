@@ -30,6 +30,7 @@ from counterfactuals_shapley.n_step_pred import (
     future_sight,
     get_future_data,
     one_hot_action,
+    plot_losses,
 )
 from counterfactuals_shapley.shapley import kernel_explainer
 from counterfactuals_shapley.wrappers import numpyfy
@@ -137,12 +138,10 @@ def compute(
     n_feats = len(env.feature_names)
     net_list = None
     net_log = copy.deepcopy(net)
-    if memory == "no_memory":
-        net = nn.Sequential(net, nn.Softmax())
 
-    elif memory == "lstm":
+    if memory == "lstm":
         net_list = copy.deepcopy(net)
-        out_layers = nn.Sequential(net[2], nn.Softmax())
+        out_layers = net[2]
         net = OneStepLSTM(
             inp_layers=net[0],
             lstm=net[1],
@@ -296,7 +295,7 @@ def compute(
             X,
             y,
             extras=extras,
-            epochs=300,
+            epochs=1000,
             explainer_extras=explainer_extras,
             criterion=nn.BCELoss(),
             name_ider="crit_models",
@@ -471,8 +470,18 @@ def compute(
         accuracy = torch.sum(predicted_labels == y_test) / len(y_test)
         _, _, f_score, _ = precision_recall_fscore_support(y_test, predicted_labels)
 
-    if not os.path.exists(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/None_{extras}_{explainer_extras}_shap.pgf"
+    plot_pairs = [
+        ("none", "none"),
+        ("one-hot", "none"),
+        ("none", "ig"),
+        ("one-hot", "ig"),
+    ]
+
+    if (
+        not os.path.exists(
+            f"tex/images/{env.metadata['name']}/{memory}/{agent}/None_{extras}_{explainer_extras}_shap.pgf"
+        )
+        and (extras, explainer_extras) in plot_pairs
     ):
         expl = kernel_explainer(pred_net, X_test, 0, device)
         indices = torch.randperm(len(X_test))[:50]
@@ -506,11 +515,11 @@ def crit_compare(agent, memory, feature_names, act_dict):
 
     net = get_torch_from_algo(algo, agent, memory)
 
-    finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/tables/table_crit.pkl")
+    finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/table_crit.pkl")
     for run in range(runs):
         print(f"{run=}")
-        if f".{env_name}/{memory}/{agent}/run_{run}/tables/table_crit.pkl" in finished:
-            continue
+        # if f".{env_name}/{memory}/{agent}/run_{run}/table_crit.pkl" in finished:
+        #     continue
 
         for i, extra in enumerate(extras):
             for j, expl in enumerate(explainer_extras):
@@ -532,3 +541,6 @@ def crit_compare(agent, memory, feature_names, act_dict):
             pickle.dump(table, f)
 
     ttest("crit", agent, memory, explainer_extras)
+
+    pair_list = [(ext, expl) for ext in extras for expl in explainer_extras]
+    plot_losses(pair_list, memory, agent, "crit_models")

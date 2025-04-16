@@ -27,6 +27,7 @@ from .n_step_pred import (
     future_sight,
     get_future_data,
     one_hot_action,
+    plot_losses,
 )
 from .shapley import kernel_explainer, shap_plot
 from .wrappers import numpyfy
@@ -233,12 +234,13 @@ def compute(
 
     net_list = None
     net_log = copy.deepcopy(net)
+
     if memory == "no_memory":
         net = nn.Sequential(net, nn.Softmax())
 
     elif memory == "lstm":
         net_list = copy.deepcopy(net)
-        out_layers = (net[2], nn.Softmax())
+        out_layers = nn.Sequential(net[2], nn.Softmax())
         net = OneStepLSTM(
             inp_layers=net[0],
             lstm=net[1],
@@ -404,7 +406,7 @@ def compute(
             pred_net,
             X,
             y,
-            epochs=300,
+            epochs=1000,
             extras=extras,
             explainer_extras=explainer_extras,
         )
@@ -597,7 +599,14 @@ def compute(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
-    if len(plot_paths) < len(y[0]):
+    plot_pairs = [
+        ("none", "none"),
+        ("one-hot", "none"),
+        ("none", "shap"),
+        ("one-hot", "shap"),
+    ]
+
+    if len(plot_paths) < len(y[0]) and (extras, explainer_extras) in plot_pairs:
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
         indices = torch.randperm(len(X_test))[:50]
         make_plots(
@@ -695,17 +704,21 @@ def ttest(name_ider, agent, memory, explainer_extras):
         df = pandas.DataFrame(data=mean_table, columns=explainer_extras)
         f.write(df.to_latex())
 
-    p_table = np.zeros((3, 3), dtype=np.float32)
+    p_table = np.ones((3, 3), dtype=np.float32)
     for i in range(3):
         for j in range(3):
-            if i + j == 0:
-                continue
-
-            p_table[i, j] = ttest_ind(
-                full_table[:, 0, 0],
-                full_table[:, i, j],
-                alternative="greater" if name_ider == "pred" else "less",
-            ).pvalue
+            if j == 0:
+                p_table[i, j] = ttest_ind(
+                    full_table[:, 0, 0],
+                    full_table[:, i, j],
+                    alternative="greater" if name_ider == "pred" else "less",
+                ).pvalue
+            else:
+                p_table[i, j] = ttest_ind(
+                    full_table[:, i, 0],
+                    full_table[:, i, j],
+                    alternative="greater" if name_ider == "pred" else "less",
+                ).pvalue
 
     with open(f".{env_name}/{memory}/{agent}/table_{name_ider}_p.txt", "w") as f:
         df = pandas.DataFrame(data=p_table, columns=explainer_extras)
@@ -732,11 +745,11 @@ def run_compare(agent, memory, feature_names, act_dict, device):
 
     ray.shutdown()
 
-    finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/tables/table_pred.pkl")
+    finished = glob.glob(f".{env_name}/{memory}/{agent}/tables/table_pred.pkl")
     for run in range(runs):
         print(f"{run=}")
-        if f".{env_name}/{memory}/{agent}/run_{run}/tables/table_pred.pkl" in finished:
-            continue
+        # if f".{env_name}/{memory}/{agent}/tables/table_pred.pkl" in finished:
+        #     continue
 
         for i, extra in enumerate(extras):
             for j, expl in enumerate(explainer_extras):
@@ -760,3 +773,7 @@ def run_compare(agent, memory, feature_names, act_dict, device):
             pickle.dump(table, f)
 
     ttest("pred", agent, memory, explainer_extras)
+    print("ttesting")
+
+    pair_list = [(ext, expl) for ext in extras for expl in explainer_extras]
+    plot_losses(pair_list, memory, agent, "pred_models")

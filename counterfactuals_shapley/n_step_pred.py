@@ -347,7 +347,8 @@ def train_net(
 
     optimizer = torch.optim.AdamW(net.parameters(), lr=0.0001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, factor=0.3, min_lr=1e-6
+        optimizer,
+        factor=0.3,
     )
 
     # Training loop
@@ -393,6 +394,9 @@ def train_net(
         if scheduler.get_last_lr() != last_lr:
             last_lr = scheduler.get_last_lr()
 
+        if last_lr[0] < 5e-7:
+            break
+
     plt.clf()
     plt.plot(range(1, 1 + len(eval_loss), 1), eval_loss)
     plt.xlabel("Epoch")
@@ -400,12 +404,7 @@ def train_net(
     env = env_creator()
 
     os.makedirs(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}",
-        exist_ok=True,
-    )
-
-    plt.savefig(
-        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}/pred_model_{extras}_{explainer_extras}.pgf"
+        f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}", exist_ok=True
     )
 
     with open(
@@ -415,7 +414,7 @@ def train_net(
         pickle.dump(eval_loss, f)
 
     env.close()
-    # Evaluate on test data
+
     net.eval()
     with torch.no_grad():
         test_outputs = net(X_test)
@@ -427,7 +426,7 @@ def train_net(
     return net
 
 
-def plot_losses(action_expl_pair_list, memory, agent, run, name_ider):
+def plot_losses(action_expl_pair_list, memory, agent, name_ider, n_runs=10):
     plt.rcParams.update(
         {
             "font.family": "serif",
@@ -438,10 +437,10 @@ def plot_losses(action_expl_pair_list, memory, agent, run, name_ider):
     )
 
     env = env_creator()
-    all_evals = []
+    all_mean_losses = []
+    all_cis = []
     legends = []
 
-    # Load evaluation losses and construct corresponding legend labels.
     for pair in action_expl_pair_list:
         extras = pair[0]
         explainer_extras = pair[1]
@@ -452,9 +451,7 @@ def plot_losses(action_expl_pair_list, memory, agent, run, name_ider):
             legend_id += "Integer"
         elif extras == "one-hot":
             legend_id += "One-hot"
-
         legend_id += " and "
-
         if explainer_extras == "none":
             legend_id += "No explanation"
         elif explainer_extras == "ig":
@@ -464,25 +461,71 @@ def plot_losses(action_expl_pair_list, memory, agent, run, name_ider):
 
         legends.append(legend_id)
 
-        file_path = f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/{extras}_{explainer_extras}_train_eval_loss.pkl"
-        with open(file_path, "rb") as f:
-            eval_loss = pickle.load(f)
-        all_evals.append(eval_loss)
+        losses_runs = []
+        for run in range(n_runs):
+            file_path = (
+                f".{env.metadata['name']}/{memory}/{agent}/run_{run}/"
+                f"{name_ider}/{extras}_{explainer_extras}_train_eval_loss.pkl"
+            )
+            with open(file_path, "rb") as f:
+                eval_loss = pickle.load(f)
+            losses_runs.append(eval_loss)
+
+        max_len = max(len(lst) for lst in losses_runs)
+        n_rows = len(losses_runs)
+
+        result = np.empty((n_rows, max_len), dtype=np.float32)
+
+        for i, lst in enumerate(losses_runs):
+            L = len(lst)
+            result[i, :] = lst[-1]
+            result[i, :L] = lst
+
+        losses_runs = np.array(result)
+        mean_loss = np.mean(losses_runs, axis=0)
+        std_loss = np.std(losses_runs, axis=0)
+
+        ci = 1.96 * std_loss / np.sqrt(n_runs)
+        all_mean_losses.append(mean_loss)
+        all_cis.append(ci)
+
+    max_len = max(len(lst) for lst in all_mean_losses)
+    n_rows = len(all_mean_losses)
+
+    result = np.empty((n_rows, max_len), dtype=np.float32)
+
+    for i, lst in enumerate(all_mean_losses):
+        L = len(lst)
+        result[i, :] = lst[-1]
+        result[i, :L] = lst
+
+    all_mean_losses = np.array(result)
+
+    result = np.empty((n_rows, max_len), dtype=np.float32)
+
+    for i, lst in enumerate(all_cis):
+        L = len(lst)
+        result[i, :] = lst[-1]
+        result[i, :L] = lst
+
+    all_cis = np.array(result)
 
     env.close()
 
-    # Create a new figure for plotting
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(5.5, 4))
 
-    # Plot each loss curve with its corresponding label.
-    for eval_loss, label in zip(all_evals, legends):
-        plt.plot(range(1, 1 + len(eval_loss)), eval_loss, label=label)
+    epochs = range(1, len(all_mean_losses[0]) + 1)
+
+    for mean_loss, ci, label in zip(all_mean_losses, all_cis, legends):
+        plt.plot(epochs, mean_loss, label=label)
+        plt.fill_between(epochs, mean_loss - ci, mean_loss + ci, alpha=0.3)
 
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
-    plt.tight_layout()  # Adjust layout to prevent clipping of labels/legend
+    plt.tight_layout()
+
     plt.savefig(
-        f".{env.metadata['name']}/{memory}/{agent}/run_{run}/{name_ider}/losses_plot.pgf",
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}_losses_plot.pgf",
         backend="pgf",
     )

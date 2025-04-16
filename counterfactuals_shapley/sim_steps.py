@@ -48,7 +48,7 @@ def sim_steps(net, num_steps, memory, device, seed):
                 )
                 mem[agent] = _mem
 
-                out = net[3](out)
+                out = net[2](out)
                 actions[agent] = int(np.argmax(out.cpu()))
 
             else:

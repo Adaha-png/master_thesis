@@ -15,7 +15,7 @@ import counterfactuals_shapley.compare as compare
 import counterfactuals_shapley.crit_state_pred as crit_state_pred
 import train_tune_eval.rllib_train as rllib_train
 import train_tune_eval.rllib_tune as tune
-from counterfactuals_shapley.compare import get_torch_from_algo, make_plots
+from counterfactuals_shapley.compare import get_torch_from_algo
 from train_tune_eval.rllib_train import env_creator
 
 load_dotenv()
@@ -105,8 +105,8 @@ if __name__ == "__main__":
         should_tune=False, new_policy=False, timesteps=20000000, memory=memory
     )
 
-    # compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
     crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
+    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
 
     for memry in ["lstm"]:
         policy_path = get_policy(

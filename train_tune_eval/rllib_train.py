@@ -251,6 +251,7 @@ def run_train(
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
                 algo.save(checkpoint_dir=save_path)
         if result["env_runners"]["episode_reward_mean"] > -50:
+            print("Truncating training")
             break
 
     if tuning:
