@@ -119,7 +119,7 @@ def shap_plot(
         }
     )
 
-    _, ax = plt.subplots(figsize=(6, 9))
+    _, ax = plt.subplots(figsize=(6, 7.4))
 
     scatter = ax.scatter(
         flattened_shap_values,
@@ -171,7 +171,7 @@ def shap_plot(
         )
         colors_subset = plt.cm.viridis(norm_subset(flattened_feature_values_subset))
 
-        _, ax_subset = plt.subplots(figsize=(6, 9))
+        _, ax_subset = plt.subplots(figsize=(6, 7.4))
         scatter_subset = ax_subset.scatter(
             flattened_shap_subset,
             repeated_feature_names_subset,

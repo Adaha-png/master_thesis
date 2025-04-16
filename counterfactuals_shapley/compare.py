@@ -745,11 +745,8 @@ def run_compare(agent, memory, feature_names, act_dict, device):
 
     ray.shutdown()
 
-    finished = glob.glob(f".{env_name}/{memory}/{agent}/tables/table_pred.pkl")
     for run in range(runs):
         print(f"{run=}")
-        # if f".{env_name}/{memory}/{agent}/tables/table_pred.pkl" in finished:
-        #     continue
 
         for i, extra in enumerate(extras):
             for j, expl in enumerate(explainer_extras):
@@ -773,7 +770,6 @@ def run_compare(agent, memory, feature_names, act_dict, device):
             pickle.dump(table, f)
 
     ttest("pred", agent, memory, explainer_extras)
-    print("ttesting")
 
     pair_list = [(ext, expl) for ext in extras for expl in explainer_extras]
     plot_losses(pair_list, memory, agent, "pred_models")
