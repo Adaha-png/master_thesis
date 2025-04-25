@@ -1,27 +1,43 @@
 \documentclass[UKenglish]{uiomasterthesis}
+\usepackage{caption}
 \usepackage{booktabs}
 \usepackage{algpseudocode}
 \usepackage{algorithm}
 \usepackage{graphicx} 
 \usepackage[UKenglish]{uiomasterfp}
 \usepackage[nottoc]{tocbibind}
-\usepackage[hidelinks]{hyperref}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
-
 \usepackage{amsthm}
 \usepackage{bm}
 \usepackage{mathtools}
 \usepackage{import}
-\usepackage[printonlyused]{acronym}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nohyperlinks]{acronym}
+\usepackage[noabbrev,nameinlink]{cleveref}
 \usepackage{tikz}
 \usepackage{pgfplots} 
 \usepackage{pgf} 
+
 \usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
 \addbibresource{ref.bib}
 \usetikzlibrary{arrows, arrows.meta, positioning, calc}
 \usepackage{listofitems}
+
+
+\makeatletter
+\AtBeginDocument
+ {
+   \def\ltx@label#1{\cref@label{#1}}%add braces
+   \def\label@in@display@noarg#1{\cref@old@label@in@display{#1}}%remove braces
+\def\label@in@mmeasure@noarg#1{%
+    \begingroup%
+      \measuring@false%
+      \cref@old@label@in@display{#1}%remove braces for multline, see https://tex.stackexchange.com/q/737204/2388
+    \endgroup}%  
+ } %
+\makeatother
 
 \pgfplotsset{compat=1.18}
 
@@ -51,7 +67,7 @@ In this thesis generative models have been used for topic suggestion, a small pa
 \section*{Acknowledgments}
 I would like to thank my external supervisor Dennis Gro\ss, as well as my internal supervisor Kyrre Glette for their guidance and support in writing this thesis. They have been of significant help when discussing how to proceed and what remains on the to-do list. I would also like to thank my cat Nokia for emotional support throughout the writing of this thesis.
 
-\section*{List of Acronyms}
+\section*{Acronyms}
 \begin{acronym}[ICANN]
     \acro  {rl}   [RL]   {Reinforcement Learning}
     \acro  {xrl} [XRL] {Explainable Reinforcement Learning}
@@ -86,11 +102,10 @@ This is the abstract
 \chapter{Introduction}
 
 \pagenumbering{arabic}
-
-Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models such as AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See Figure \ref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
+Sequential decision-making problems are problems where one decision leads to a new state that requires a new decision to be made. An example of this is autonomously driving from point A to point B through city streets. For these types of problems \ac{rl} systems are used. \ac{rl}, both multi- and single-agent models have seen a significant rise in successful use and applicability in recent years, with models such as AlphaGo\cite{article} and smacv2\cite{ellis2023smacv2}. These models learn by agents performing actions in a given state decided by a policy that lead to a new state, and learning by receiving rewards depending on if the new state is preferable to the previous, the aim is to learn a near optimal policy for achieving a fixed goal\cite{Sutton1998}. The agent uses an observation of the state to choose an action. The environment describes how an action affects the state. See \cref{fig:rl_basics}. In a \ac{marl} system, we would have multiple agents.
 
 \begin{figure}[H]
-\begin{center}
+    \centering
     \hspace{-4cm}
     \begin{tikzpicture}[>=Latex, node distance=2.5cm, auto, font=\small]
     % Agent Node (with Policy and Value Networks)
@@ -126,7 +141,6 @@ Sequential decision-making problems are problems where one decision leads to a n
 \end{tikzpicture}
 \caption{Diagram showing the \ac{ppo} update algorithm}
 \label{fig:rl_basics}
-\end{center}
 \end{figure}
 
 
@@ -135,6 +149,7 @@ Sequential decision-making problems are problems where one decision leads to a n
 A significant problem with many deep machine learning models, including \ac{marl} policies, is known as the black box problem\cite{zednik2019solving}. This problem describes how the processing of information is hidden from a human user due to the opacity of the model, and we just have to trust that the model uses relevant data to come to the conclusion it does, which it often doesn't do. For many tasks and models where the impact of the output isn't highly significant this isn't a big issue, but for tasks like autonomous driving we simply cannot use these models without trust for the models processing of data and that the solution given wont hurt anyone. We can considering autonomous driving as a \ac{marl} system if we consider each vehicle as an agent. To solve this we would like to have models that along with an output can provide us with some kind of reasoning for what information is used and how.
 
 All this essentially means, until the black box problem is solved, autopilot will always require a driver behind the wheel\cite{tian2018deeptest}. Despite having high accuracy, precision and recall, a reinforcement learning model might choose a less than preferable action in edge cases or states not well covered by training and test sets, for example driving on snowy roads when all images in the training data is from warmer climates, or combinations that aren't well covered, like a foggy, snowy road with a sharp right turn.
+
 With a way to ask the agent for intent, we could find that it has learned to always expect there to not be a car around the corner, which is not always obvious from looking at the dataset, but if it in a decision relies on the road to be empty to choose a safe route, this is obviously a huge issue. This paper aims to explain how an agent in a \ac{marl} setting decides on an action due to what it expects from other agents in the future. The field working on combating this issue is known is Explainable reinforcement learning.
 
 \section{Problem statement}
@@ -145,14 +160,13 @@ In psychology it is well known that most human based decisions are made with int
 
 
 \section{Scope and limitations}
-We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. However, due to time limitations we restrict the framework to only accept PettingZoo example environments or environments created with the PettingZoo environment creation tool. \ac{marl} environments can be divided into two major categories, \ac{aec} and parallel. \ac{aec} environments are environments where the state transition happens after each agent chooses an action, and parallel environments are environments where all the agents choose an action each before the transition happens. See figure \ref{fig:aec}.
+We aim to construct a framework to describe the intent of the agents in the KAZ environment, and we aim to make it applicable to other environments as well. However, due to time limitations we restrict the framework to only accept PettingZoo example environments or environments created with the PettingZoo environment creation tool. \ac{marl} environments can be divided into two major categories, \ac{aec} and parallel. \ac{aec} environments are environments where the state transition happens after each agent chooses an action, and parallel environments are environments where all the agents choose an action each before the transition happens. See \cref{fig:aec}.
 
 Due to limited time and resources the size of policy or value networks, as well as any other \acp{nn} or otherwise computationally expensive algorithm used, will have to be significantly limited, this will impact results in a meaningful way, and therefore we will keep all \acp{nn} comparable sizes, and focus on doing experiments on how other factors than network size impact the results.
 
 We do not have access to any real world datasets, so its hard to ensure the methods we have developed will be directly applicable, however the results we get will still be relevant for later research in the area.
 \begin{figure}[H]
-\begin{center}
-
+\centering
 \begin{tikzpicture}[>=Latex, node distance=2.5cm, auto, font=\small]
 
     % Agent 1 Node
@@ -181,7 +195,6 @@ We do not have access to any real world datasets, so its hard to ensure the meth
 
 \caption{Example \ac{aec} in an environment with 2 agents.}
 \label{fig:aec}
-\end{center}
 \end{figure}
 
 \section{Research methods}
@@ -201,7 +214,7 @@ If this research aids to make \ac{marl} methods applicable to real world setting
 
 
 \section{Main contributions}
-As discussed in \ref{sec:motivation}, \ref{sec:problem} and \ref{sec:research}, there are certain specific objectives we aim to reach. In general we aim to expand on current future prediction research.
+As discussed in \cref{sec:motivation}, \cref{sec:problem} and \cref{sec:research}, there are certain specific objectives we aim to reach. In general we aim to expand on current future prediction research.
 
 \begin{itemize}
 
@@ -220,22 +233,22 @@ As discussed in \ref{sec:motivation}, \ref{sec:problem} and \ref{sec:research}, 
 This thesis will be structured as follows:
 \begin{itemize}
 
-    \item \textbf{Chapter 2: Background and related works}\\
+    \item \textbf{\cref{chap:background}: Background and related works}\\
         This chapter will introduce important concepts, both \ac{rl} and explainability related, and briefly discuss the history of \ac{xai} methods, and how they are applicable to my use case. We will also consider \ac{xrl} methods that are already developed and how to expand or integrate them into developed methods of our own.
 
-    \item \textbf{Chapter 3: Methodology}\\
+    \item \textbf{\cref{chap:meth}: Methodology}\\
         This chapter discusses the specific principles, procedures and techniques used to conduct the \ac{xrl} research done in this thesis, to ensure that the results we get are valid and reliable.
 
-    \item \textbf{Chapter 4: Experiments}\\
+    \item \textbf{\cref{chap:exp}: Experiments}\\
         This chapter details the setup, results and analysis of the specific experiments we use to evaluate the hypothesis and answer research questions based on certain evaluation metrics, and baseline comparisons.
 
-    \item \textbf{Chapter 5: Discussion}\\
+    \item \textbf{\cref{chap:disc}: Discussion}\\
         This chapter will analyze the results of the experiments and discuss their implication for \ac{xrl} research. It will also contain the limitations of our work and briefly discuss how to expand on any research done.
 \end{itemize}
 
 
-\medskip
 \chapter{Background and Related Works}
+\label{chap:background}
 In this chapter I will introduce relevant concepts that are required to fully understand this thesis.
 
 \section{Supervised learning}
@@ -269,7 +282,7 @@ The objective in an \ac{mdp} is to find a policy \(\pi(s)\) that maximizes the e
 
 $$V^\pi(s) = \mathbb{E} \left[ \sum_{t=0}^{\infty} \gamma^t R(s_t, a_t, s_{t+1}) \mid \pi \right]$$
 
-where \(V^\pi(s)\) is the value function that represents the expected return starting from state \(s\) and following policy \(\pi\). See figure \ref{fig:rl_basics}.
+where \(V^\pi(s)\) is the value function that represents the expected return starting from state \(s\) and following policy \(\pi\). See \cref{fig:rl_basics}.
 
 
 \subsection{Markov Decision Process in Multi Agent Reinforcement Learning}
@@ -277,9 +290,9 @@ In a \ac{marl} setting agents could have shared or independent \acp{mdp} dependi
 In a cooperative \ac{marl} setting the goal is some social welfare function that maximises rewards for the agents, either collective rewards or a mix of collective and individual rewards. In such a setting each agent has \ac{mdp}. Assuming that state space \(\mathcal{S}\) and discount factor \(\gamma\) is shared, which they will be in all my experiments, if two agents have the same reward structure $R$ and action space \(\mathcal{A}\) their objective would be the same, in which case they could share policy \(\pi\) and could therefore share \(\mathcal{M}\).
 
 \subsection{Deep Reinforcement Learning}
-Traditional RL methods struggle with scalability due to the fact that they rely on discrete state representations. \ac{drl} uses deep \acp{nn} to approximate the policy function $\pi_\theta(s)$, the value function $V_\phi(s)$, or the Q-function $Q_\theta(s,a)$, making it possible to represent these functions in continuous and complex environments. See figure \ref{fig:neural_network}. Input layer is size of state for all three functions. Output layer is size of action space for $Q_\theta(s,a)$ and $\pi_\theta(s)$. $V_\phi(s)$ only has one output node. In a feed forward \ac{nn} like we have here each node has the value of some activation function $\phi(x)$ where $x$ is the sum of nodes of the previous layer multiplied by their respective weights, usually as well as adding some bias, shown as the connections between the nodes. Common activation functions are $ReLU(x) = max(0,v)$ and $tanh=\frac{e^v-e^v}{e^v+e^v}$ where $v$ is the value before activation.
+Traditional RL methods struggle with scalability due to the fact that they rely on discrete state representations. \ac{drl} uses deep \acp{nn} to approximate the policy function $\pi_\theta(s)$, the value function $V_\phi(s)$, or the Q-function $Q_\theta(s,a)$, making it possible to represent these functions in continuous and complex environments. See \cref{fig:neural_network}. Input layer is size of state for all three functions. Output layer is size of action space for $Q_\theta(s,a)$ and $\pi_\theta(s)$. $V_\phi(s)$ only has one output node. In a feed forward \ac{nn} like we have here each node has the value of some activation function $\phi(x)$ where $x$ is the sum of nodes of the previous layer multiplied by their respective weights, usually as well as adding some bias, shown as the connections between the nodes. Common activation functions are $ReLU(x) = max(0,v)$ and $tanh=\frac{e^v-e^v}{e^v+e^v}$ where $v$ is the value before activation.
 \begin{figure}[H]
-    \begin{center}
+    \centering
     \begin{tikzpicture}[
         x=2.2cm, y=1.4cm, 
         mynode/.style={thick, draw=black, circle, minimum size=22}, % Base style
@@ -317,7 +330,6 @@ Traditional RL methods struggle with scalability due to the fact that they rely 
     \node[align=center, below=1] at (N3-5.90) {Hidden Layers};
     \node[align=center, below=1] at (N5-3.90) {Output Layer};
     \end{tikzpicture}
-    \end{center}
     \caption{Illustration of an example of a \ac{nn} with three hidden layers}
     \label{fig:neural_network}
 \end{figure}
@@ -331,10 +343,10 @@ In contrast, model-free reinforcement learning does not learn or utilize an expl
 Model-based methods enable explicit planning by using the learned environment transitions in methods such as Monte Carlo Tree Search \cite{_wiechowski_2022}, while model-free methods rely on direct experience to optimize behavior. We will be using \ac{ppo} to optimize our algorithms, and will not be using simulations or any other form of explicit planning, ensuring that the methods developed will be applicable in the most amount of environments.
 
 \subsection{Recurrency in Deep Reinforcement Learning Policies}
-Recurrency in \ac{nn} is a way to carry over information from previous timesteps to current ones, if we believe that information could be useful. \acp{rnn} are sometimes used when constructing the architecture of \ac{drl} policies \cite{hausknecht2017deeprecurrentqlearningpartially}, mainly for two reasons. The first one is for when your environment can be modeled as a \ac{pomdp}, in which case memory is important as the current observation is not always enough to capture all the information an agent could have. The second reason is for planning, like in the \ac{drc} architecture\cite{guez2019investigationmodelfreeplanning}. See figure \ref{fig:rnn}.
+Recurrency in \ac{nn} is a way to carry over information from previous timesteps to current ones, if we believe that information could be useful. \acp{rnn} are sometimes used when constructing the architecture of \ac{drl} policies \cite{hausknecht2017deeprecurrentqlearningpartially}, mainly for two reasons. The first one is for when your environment can be modeled as a \ac{pomdp}, in which case memory is important as the current observation is not always enough to capture all the information an agent could have. The second reason is for planning, like in the \ac{drc} architecture\cite{guez2019investigationmodelfreeplanning}. See \cref{fig:rnn}.
 
-\begin{center}
-    \begin{figure}[H]
+\begin{figure}[H]
+    \centering
     \hspace{3.5cm}
     \begin{tikzpicture}[>=stealth, auto, node distance=1.5cm and 2cm]
 
@@ -373,7 +385,6 @@ Recurrency in \ac{nn} is a way to carry over information from previous timesteps
 \caption{Recurrent neural network showing a 3 step time series with hidden values propagating through time.}
 \label{fig:rnn}
 \end{figure}
-\end{center}
 
 \subsection{Backpropagation and gradient descent}
 Backpropagation is a training algorithm used to train \acp{dnn} to minimize error. If a network is differentiable you can use backpropagation. First you do a forward pass through the network, i.e. your network calculates a prediction based on an input. Then you calculate loss, the difference between true value and predicted value is passed to some function. MSE is one such function.
@@ -403,7 +414,7 @@ Tracing how an observation leads to a state, through the action chosen and the e
 \subsubsection{Intrinsically Explainable Models}
 Intrinsically explainable models have the already stated drawback of relying on careful model construction, which can be challenging and may impact model performance. While these models offer transparency from the get go, they are often less flexible and might not achieve the same level of accuracy as more complex \ac{rl} models. Given that we aim to analyze and compare already trained \ac{rl} policies, we will mostly focus on post hoc explainability methods in this thesis.
 
-\medskip
+
 
 \subsection{Fidelity of Explainable Artificial Intelligence Methods}
 It is important to understand why the current \ac{xai} methods not meant for \ac{rl} applications aren't always useful to us.
@@ -415,7 +426,7 @@ Saliency maps which have been successfully used for classification of images pro
 Another commonly used \ac{xai} method is model distillation, which works by transferring knowledge from a large model to a smaller, usually interpretable, one, for instance a deep learning network to a decision tree \cite{bastani2019verifiable}. This has use cases in verifyability, but struggles to fully explain the temporal aspect of \ac{rl} policies, and are therefore not sufficient as an explainer.
 
 However, these methods might still prove insightful in conjunction with other intent-based methods, the state in which a decision is made is obviously very relevant to why that particular decision was made. We could perhaps use these methods to answer questions such as "What part of agent As Observation this state, lead it to believe agent B would end up at these coordinates at a later state?"
-\medskip
+
 
 \subsection{Future-Based Explanations}
 Next, I will describe in slightly more detail, what is meant by an intent based explainer, like I want to develop, and how to use it.
@@ -432,7 +443,7 @@ Another, and perhaps more important, use case is safety. If when online, i.e. th
 
 
 \subsubsection{Definition of Intent}
-We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see section \ref{sec:acter}. Details in section \ref{sec:counterfactual}.
+We define the state transition function $T(s, \textbf{a}, s')$ where $\textbf{a}$ is the set of simultaneous actions made by the set of active agents, in our case, one action per agent. Given $T$ the agent should when prompted output a set of trajectories $\tau = \{(s_0,\textbf{a}_0),(s,\textbf{a}),(s_1,\textbf{a}_1)...(s_n,\textbf{a}_n)\}$ where $s_0$ is the current state, $\textbf{a}_i$ is the set of actions taken in $s_i$, and $s_{i+1}$ is the state reached by $T(s_i,\textbf{a}_i, s_{i+1})$. We will apply a series of methods on $\tau$ to extract intent. One of these methods is discovering counterfactual trajectories, $'\tau$, where the actions made by the agents in $'\tau$ are as similar as possible to the actions made by the agents in $\tau$, but the total reward gained is as low as possible. $'s_0 = s_0$ and given an identical transition function $T$ the goal is to discover which actions are most important to receive the reward. This method is similar to and inspired by ACTER\cite{gajcin2024acter}, see \cref{sec:acter}.
 
 \section{Explainable Deep Reinforcement Learning: State of the Art and Challenges}
 This paper is a comprehensive survey of the most common state of the art methods applicable to \ac{rl}. Section 4 specifically highlights \ac{xdrl} methods. This subsection will focus on these methods\cite{sota}. This section will serve to give an overview of \ac{xrl} methods that already exist, and if and how I use these methods to develop my own.
@@ -454,9 +465,9 @@ LRP is a method to assign importance to each node in the network by working back
 \subsubsection{HIGHLIGHTS}
 This is a intrinsically explainable \ac{rl} algorithm and it works by extracting sub-trajectories with important states, states where a wrong action can lead to significant decreases in reward, to explain how the agent acts in these states. It also provides context in the form of neighbouring states in the important sub-trajectories, in order for users to understand why it chose the trajectory it did.
 
-\subsection{Objective explanations}
+% \subsection{Objective explanations}
 
-\subsection{Outcome explanation}
+% \subsection{Outcome explanation}
 
 
 \section{Relevant Methods}
@@ -467,7 +478,7 @@ In particular "What did you think would happen? Explaining Agent Behaviour throu
 "Are large language models post-hoc explainers" \cite{kroeger2024large} Could be relevant as using other explainers to compare explanations is useful. "ACTER: Diverse and Actionable Counterfactual Sequences for Explaining and Diagnosing \ac{rl} Policies" \cite{gajcin2024acter} 
 
 \subsection{What did you think would happen? Explaining Agent Behaviour through Intended Outcomes}
-What did you think would happen describes what an agent expects to happen in future states, and why the current action is chosen based on the future expectations. As stated in the paper, a limitation of their method means it doesn't work well with high dimensionality. The two main difference between this paper and the problem i aim to solve is that they're focusing on an environment with a single agent and that our observation space will be high dimensionality. It uses Q-learning and Markov-chains that train simultaneously with a "belief map" that shows what the agent expects the environment to look like in future states. In the simple examples used in the paper it shows where it believes the taxi should drive and therefore chooses an action to follow this path. This is not directly applicable to my thesis as it's unlikely that Q-learning or Markov chains will be viable for the policy and explainer based on the environment. However the paper is successful in explaining an agents underlying motivations and beliefs about the causal nature of the environment, and using similar methods might be an effective means for making \ac{marl} agents with higher dimensionality understandable from a human perspective. %See Figure \ref{fig:taxi}
+What did you think would happen describes what an agent expects to happen in future states, and why the current action is chosen based on the future expectations. As stated in the paper, a limitation of their method means it doesn't work well with high dimensionality. The two main difference between this paper and the problem i aim to solve is that they're focusing on an environment with a single agent and that our observation space will be high dimensionality. It uses Q-learning and Markov-chains that train simultaneously with a "belief map" that shows what the agent expects the environment to look like in future states. In the simple examples used in the paper it shows where it believes the taxi should drive and therefore chooses an action to follow this path. This is not directly applicable to my thesis as it's unlikely that Q-learning or Markov chains will be viable for the policy and explainer based on the environment. However the paper is successful in explaining an agents underlying motivations and beliefs about the causal nature of the environment, and using similar methods might be an effective means for making \ac{marl} agents with higher dimensionality understandable from a human perspective. 
 
 \subsection{Explainable Reinforcement Learning via a Causal world model}
 Explainable Reinforcement Learning via a Causal world model constructs a sparse model to connect causal relationships, without prior knowledge of the causal relationship, rather than a fully connected one, but they still achieve high accuracy and results comparable to other fully connected \ac{mbrl} policies. Which is important, as there is often a trade off between explainability and performance. Using the same model for both explanations and choosing actions also make the explanations faithful to the intentions of the agent. The paper also describes a novel approach to derive causal chains from the causal influence of the actions, which lets us find the intent of the agent. The paper is successful being applied to \ac{mbrl}, and is also applicable to models with infinite actions spaces, which is a limitation of some other models, see previous sub section.
@@ -501,7 +512,7 @@ This section describes recent development in the field of planning and future pr
 
 \subsection{Predicting Future Actions Of Reinforcement Learning Agents}
 \label{sec:predicting_actions}
-This paper describes a method developed by the author that predicts future actions and events \cite{chung2024predictingfutureactionsreinforcement}. It does this for non planning policies, like Impala, implicit planning policies like \ac{drc}, see section \ref{sec:impl_planning}, and explicit planning policies like MuZero and Thinker.
+This paper describes a method developed by the author that predicts future actions and events \cite{chung2024predictingfutureactionsreinforcement}. It does this for non planning policies, like Impala, implicit planning policies like \ac{drc}, see \cref{sec:impl_planning}, and explicit planning policies like MuZero and Thinker.
 
 Non planning policies are policies designed without planning in mind. Pure \ac{nn} policies without recurrency are considered to be non planning, as they have not been found to exhibit planning like behaviour. This paper found that when predicting future states and actions both inner states from implicit planners, and explicit planners improved accuracy over non planning agents.
 
@@ -513,12 +524,12 @@ The paper proposes two methods on predicting future states and actions, simulati
 \label{sec:impl_planning}
 This paper investigates whether planning like behaviour can emerge from model free \ac{rl}, without any explicit planning methods or inductive biases designed to induce planning behaviour \cite{guez2019investigationmodelfreeplanning}. The authors introduce and explore if the \ac{drc} architecture can learn to implicitly plan through training. World models suffer from scalability issues, and inductive biases require a priori knowledge of the environment. The \ac{drc} architecture is comprised of $3$ layers of ConvLSTMs and each layer is iterated through $3$ times each at each timestep.
 
-This architecture is tested on domains that require planning such as Sokoban, and they test the agents ability to generalize as well as data efficiency. The results of the paper is that not only does the model exhibit planning like behaviour, but it outperforms state of the art methods that use inductive biases or world models. The paper described in section \ref{sec:predicting_actions} finds that using the inner state of implicit planner agents improves predicted future states and actions.
+This architecture is tested on domains that require planning such as Sokoban, and they test the agents ability to generalize as well as data efficiency. The results of the paper is that not only does the model exhibit planning like behaviour, but it outperforms state of the art methods that use inductive biases or world models. The paper described in \cref{sec:predicting_actions} finds that using the inner state of implicit planner agents improves predicted future states and actions.
 
 
-\medskip
 \chapter{Methodology}
-This chapter will elaborate on the methods I will use to perform the experiments. Firstly, in section \ref{sec:event_state_meth}, I will discuss in detail the state and events we want to predict. Then, in section \ref{sec:feat_imp_meth}, I will elucidate how i attribute importance to observation features. After that, in section \ref{sec:intent_meth}, I will define what I mean by intent for an agent in a \ac{rl} setting. Then, in section \ref{sec:temp_meth}, I will discuss what temporal information I will use and how to get it. Then, in section \ref{sec:stat_meth}, I will discuss what statistical tests I perform to validate my results. Lastly, in section \ref{sec:env_meth}, I will elaborate on what environments I perform the experiments on, and how these environments are structured.
+\label{chap:meth}
+This chapter will elaborate on the methods I will use to perform the experiments. Firstly, in \cref{sec:event_state_meth}, I will discuss in detail the state and events we want to predict. Then, in \cref{sec:feat_imp_meth}, I will elucidate how i attribute importance to observation features. After that, in \cref{sec:intent_meth}, I will define what I mean by intent for an agent in a \ac{rl} setting. Then, in \cref{sec:temp_meth}, I will discuss what temporal information I will use and how to get it. Then, in \cref{sec:stat_meth}, I will discuss what statistical tests I perform to validate my results. Lastly, in \cref{sec:env_meth}, I will elaborate on what environments I perform the experiments on, and how these environments are structured.
 
 
 \section{Event and State prediction}
@@ -533,6 +544,7 @@ In a safety critical real world scenario, like autonomous driving, its important
 \subsection{Maximum logit difference}
 \label{sec:mld}
 The output of the policy, in the case of discrete action space, is a vector with size $n$, where $n$ is the amount of possible actions, without an activation function. This is also known as the logit vector. A state in which there is a high difference between the highest logit and the lowest logit means the agent has learned to avoid the action associated with the low logit and prefers the action with the high logit, which would mean the agent associates the high logit action with high future rewards, and the low logit action with low future rewards. If the logits are close to each other it means the agent is either uncertain about which action to choose or indifferent to the different actions in this state. Given that the policy has been trained well enough that it correctly predicts the optimal action in a state, I consider this state to be critical if the difference between the highest logit and the lowest logit is higher than some chosen threshold.
+
 To compute whether a trajectory contains a critical state I consider the maximum logit difference in each of the states, and assign the maximum of these differences to the trajectory. After computing a value for every trajectory, we consider the median of the values assigned to the trajectories as the threshold for whether a state contains a critical state or not. This means we consider half the trajectories to contain a critical state. The main reason for this is it makes using a baseline of random guesses have expected $50\%$ accuracy. This means if we train a binary classifier with initial observation as input and whether the trajectory contains a critical state as output any improvement over $50\%$ means a network has learned a meaningful connection between the input and the output, as opposed to simply learning that one class is more common than another.
 
 \begin{gather*}
@@ -548,66 +560,67 @@ To compute whether a trajectory contains a critical state I consider the maximum
 \Delta(x) > \tau
 \end{equation}
 
-where $z_{i,j}$ is output $j$ of policy $\pi_\theta$ in state $i$, \ref{eq:crit_criterion} is the criterion for marking a sub-trajectory as containing a critical state, and $\tau$ is the threshold for said equation.
+where $z_{i,j}$ is output $j$ of policy $\pi_\theta$ in state $i$, \cref{eq:crit_criterion} is the criterion for marking a sub-trajectory as containing a critical state, and $\tau$ is the threshold for said equation.
 
-
-\subsection{Counterfactual sequences}
-\label{sec:counterfactual}
-In the case of continuous action spaces we cannot look at maximum logit difference, as a policy network doesn't output logits, but rather the actions to choose. To discover counterfactual sequences we use the \ac{ea} known as \ac{nsga}. This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \ref{alg:fnds}. 
-We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. 
-
-\begin{algorithm}
-\caption{Fast Non-Dominated Sort}
-\label{alg:fnds}
-\begin{algorithmic}
-    \State $F_i \gets \emptyset$
-    \ForAll{$p \in P$}
-    \State $S_p \gets \emptyset$
-    \State $n_p \gets 0$
-        \ForAll{$q \in P$}
-            \If{$p \prec q$}
-                \State $S_p \gets S_p \cup q$
-            \ElsIf{$q \prec p$}
-                \State $n_p \gets n_p + 1$
-            \EndIf
-        \EndFor
-        \If{$n_p == 0$}
-            \State $F_1 \gets F_1 \cup p$
-            \State $p_{rank} \gets 1$
-        \EndIf
-    \EndFor
-    \State $i \gets 1$
-    \While{$F_i \neq \emptyset$}
-        \State $Q \gets \emptyset$
-        \ForAll{$p \in F_i$} 
-            \ForAll{$q \in S_p$}
-                \State $n_q \gets n_q - 1$
-                \If{$n_q \gets 0$}
-                    \State $q_{rank} \gets i + 1$
-                    \State $Q \gets Q \cup q$
-                \EndIf
-            \EndFor
-        \EndFor
-        \State $i \gets i + 1$
-        \State $F_i \gets Q$
-    \EndWhile
-\end{algorithmic}
-\end{algorithm}
-
+% \subsection{Counterfactual sequences}
+% \label{sec:counterfactual}
+% In the case of continuous action spaces we cannot look at maximum logit difference, as a policy network doesn't output logits, but rather the actions to choose. To discover counterfactual sequences we use the \ac{ea} known as \ac{nsga}. This algorithm is a significant improvement over earlier multi-objective EAs that use non dominated sorting. It has a complexity of $O(MN^2)$ instead of $O(MN^3)$, elitist approach and a specified sharing parameter, all three of which, many earlier algorithms lacked. \cite{Deb2001AFA} Pseudocode for sorting in algorithm \cref{alg:fnds}. 
+%
+% We use multi objective search because we want to minimize action change while maximizing total reward change throughout a simulation. This defines our two objectives. This way we can discover what actions or combinations there of have the highest impact on the environment. When working with a discrete action space, that is when we have a finite, usually relatively small, amount of actions to choose from, we define the action objective that we want to minimize as how many actions in a single timestep are different from a predefined sequence found with a trained model. After the timestep with the found actions we again use the model to roll out the rest of the sequence. We compare the altered sequence to the original sequence and measure the total reward both of these sequences receive. We want to maximize this difference. 
+%
+% \begin{algorithm}
+% \caption{Fast Non-Dominated Sort}
+% \label{alg:fnds}
+% \begin{algorithmic}
+%     \State $F_i \gets \emptyset$
+%     \ForAll{$p \in P$}
+%     \State $S_p \gets \emptyset$
+%     \State $n_p \gets 0$
+%         \ForAll{$q \in P$}
+%             \If{$p \prec q$}
+%                 \State $S_p \gets S_p \cup q$
+%             \ElsIf{$q \prec p$}
+%                 \State $n_p \gets n_p + 1$
+%             \EndIf
+%         \EndFor
+%         \If{$n_p == 0$}
+%             \State $F_1 \gets F_1 \cup p$
+%             \State $p_{rank} \gets 1$
+%         \EndIf
+%     \EndFor
+%     \State $i \gets 1$
+%     \While{$F_i \neq \emptyset$}
+%         \State $Q \gets \emptyset$
+%         \ForAll{$p \in F_i$} 
+%             \ForAll{$q \in S_p$}
+%                 \State $n_q \gets n_q - 1$
+%                 \If{$n_q \gets 0$}
+%                     \State $q_{rank} \gets i + 1$
+%                     \State $Q \gets Q \cup q$
+%                 \EndIf
+%             \EndFor
+%         \EndFor
+%         \State $i \gets i + 1$
+%         \State $F_i \gets Q$
+%     \EndWhile
+% \end{algorithmic}
+% \end{algorithm}
+%
 
 \section{Feature importance}
 \label{sec:feat_imp_meth}
-I decided to experiment on whether including feature importance could improve the event and state predictions. The methods used to attribute importance to features were SHAP described in section \ref{sec:shap_meth}, and Integrated Gradients described in section \ref{sec:intgrad}. This section also describes how I decided on choosing baseline values for these methods.
+I decided to experiment on whether including feature importance could improve the event and state predictions. The methods used to attribute importance to features were SHAP described in \cref{sec:shap_meth}, and Integrated Gradients described in \cref{sec:intgrad}. This section also describes how I decided on choosing baseline values for these methods.
+
 I can use these methods either on logit output or on softmax values with different intentions. If I use the methods on the softmax values I get insight into what affects the confidence of the policy, while if I use them on logit output it better reflects the policy networks inner workings, as in my case, the policy network outputs logits and not softmax scores.
 
 \subsection{Shapley values for observations}
 \label{sec:shap_meth}
-The Shapley value is an idea from cooperative game theory where it was used to measure the contribution of each player to the total outcome. It has been adapted to deep reinforcement learning where each feature is considered a player and the policy is considered a game. In our case we initially want to use it to explain actions so we consider that to be the outcome of the game. The Shapley value is calculated by taking each feature and finding the marginal contribution, i.e. observing how the prediction changes when you include the feature and compare the outcome to when it wasn't included, you do this over all possible coalitions of features. See algorithm \ref{alg:shapley}.
+The Shapley value is an idea from cooperative game theory where it was used to measure the contribution of each player to the total outcome. It has been adapted to deep reinforcement learning where each feature is considered a player and the policy is considered a game. In our case we initially want to use it to explain actions so we consider that to be the outcome of the game. The Shapley value is calculated by taking each feature and finding the marginal contribution, i.e. observing how the prediction changes when you include the feature and compare the outcome to when it wasn't included, you do this over all possible coalitions of features. See \cref{alg:shapley}.
 
 The Shapley value has a computational complexity of $O(2^n)$, and because of this we often use estimates instead of exact Shapley values. There are two main ways of reducing the complexity. The first one is using a surrogate model instead of the policy to reduce the number of features, and the second is reducing the number of coalitions. Since our policy is a \ac{nn} we have the luxury of approximating Shapley values as a gradient problem, and therefore circumvent the whole problem with complexity \cite{captum_shap}.
 
 Since we have forward passes of the policy, and each can be considered one example of a game we sample the games and use the average marginal contribution over all the games instead of just one game.
-The Shapley value can help us understand how the policy acts in general. We can also use it to get explanations for single observations, however these explanations won't always have high fidelity. We will explore more of how the fidelity of Shapley values for single explanations compare to high fidelity explainability methods like gradient methods. See section \ref{sec:intgrad}
+The Shapley value can help us understand how the policy acts in general. We can also use it to get explanations for single observations, however these explanations won't always have high fidelity. We will explore more of how the fidelity of Shapley values for single explanations compare to high fidelity explainability methods like gradient methods. See \cref{sec:intgrad}
 
 \begin{algorithm}
 \caption{Shapley Value Calculation with Baseline Replacement}
@@ -645,7 +658,7 @@ The Shapley value can help us understand how the policy acts in general. We can 
 
 \subsection{Integrated Gradients}
 \label{sec:intgrad}
-By integrating the gradient of the model prediction when going from a specified baseline value as input to our specific observation x we get a high fidelity explanation for what features were important in that specific observation. We integrate from the baseline instead of just getting the gradient in our observation because of the saturation problem. If a feature is important to the action the gradient could be small for the value x, but the integral of the gradient from the baseline to x would still be large. Conversely a gradient for the observation x could be significant in a small area around a feature in x even if that feature isn't as significant as the gradient in x would lead us to believe \cite{sundararajan2017axiomaticattributiondeepnetworks}. See algorithm \ref{alg:intgrad}. Comparing figure \ref{fig:intgrad} with figure \ref{fig:shap} we can see that the values are similar. This means that in the case of this observation, the fidelity of the Shapley explanation is high.
+By integrating the gradient of the model prediction when going from a specified baseline value as input to our specific observation x we get a high fidelity explanation for what features were important in that specific observation. We integrate from the baseline instead of just getting the gradient in our observation because of the saturation problem. If a feature is important to the action the gradient could be small for the value x, but the integral of the gradient from the baseline to x would still be large. Conversely a gradient for the observation x could be significant in a small area around a feature in x even if that feature isn't as significant as the gradient in x would lead us to believe \cite{sundararajan2017axiomaticattributiondeepnetworks}. See \cref{alg:intgrad}. 
 
 \begin{algorithm}
 \caption{Integrated Gradients for Feature Importance in Reinforcement Learning}
@@ -676,6 +689,7 @@ By integrating the gradient of the model prediction when going from a specified 
 
 \subsection{Choosing a feature attribution baseline}
 Both the Shapley value attribution and the Integrated Gradients attribution I use require a baseline. A baseline should represents a neutral, or absence of a value, and needs to be from within the domain that a model is trained on, as a models could behave unpredictably on data outside of their domain, In my case, the environments we used has observation spaces with values in $[0,1]$, meaning that for our baseline we need to choose values in this range. There are several ways to choose a baseline, and each baseline will yield different results. If the domain is a set of images, a common baseline to use is black, or $(0,0,0)$ if the images are represented with RGB values\cite{baseline_bird}. Intuitively, this can be understood as \acp{nn} looking for patterns in an image, which disappear if the image is monochrome.
+
 In my case, I do not have images, but tabular data. Using $0$ as baseline values is likely not a good choice, as each value when using tabular data represents an interpretable value and $0$ represents a value the model would process as extreme, instead of neutral. Another possibility is choosing the dataset mean as a baseline, which has been used successfully in other \ac{rl} applications, although not \ac{rl} applications with tabular data that I am aware of \cite{baseline_rl}.
 
 
@@ -684,8 +698,6 @@ In my case, I do not have images, but tabular data. Using $0$ as baseline values
 In an environment where the agents successfully reaches a desirable state we can assume that at some point in the trajectory an agents intent is to reach this state. We can train a prediction model on such an environment that uses a certain state or observation as input and outputs features of interest some time in the future. In the example of autonomous vehicles the output could be predicted position of the vehicle at a future point in time. If our prediction model is successful, then it could be considered part of an explanation for the intent of an agent.
 
 Additionally, we train different models with different sets of inputs to identify what is important to identify intent. We train one model that takes just the observation as input, one that takes observation and action, and one that takes observation and action one hot encoded. While action as an integer and action one hot encoded contains the same amount of information it could be easier for a network to learn correlations with the additional inputs. Looking at the loss curve during training, as well as final loss, this suspicion is confirmed to be true when dealing with a network architecture and environment like we are currently using, 2 fully connected hidden layers with the hyperbolic tangent as the activation, in the environment simple\_spread\_v3. While the input layer for the three prediction models are slightly different the difference in training time is negligible. 
-
-After 400 epochs the base prediction model reached a evaluation loss of 0.0407, the model with integer action as part of the input reached a evaluation loss of 0.0359 and the model with one-hot encoded action as part of the input reached an evaluation loss of 0.0322. See figure \ref{fig:pred_loss_none}, \ref{fig:pred_loss_action} and \ref{fig:pred_loss_one-hot}. Both the base model and the one-hot action model stagnate long before 200 epochs is reached. If we let the model with integer action as input train for another 50 epochs it does not improve. The test loss for these three models respectively is ... . These graphs and values indicate that while action and an explanation are useful for extracting intent, in the context of our environment and model one-hot values and integrated gradient explanation are the most useful. The difference between using Shapley values and
 
 
 \section{Temporal information}
@@ -706,10 +718,9 @@ h_t = o_t \odot \tanh(c_t)
 
 Intuitively, $f_t$ can be viewed as how much of the previous cell state $c_{t-1}$ to forget, $i_t$ can be viewed as how much of the candidate cell state $\tilde{c}_t$ to remember, and $o_t$ can be viewed as how much of the $c_{t}$ to output. Capital letters represent matrices and lowercase letters represent vectors.
 
-\begin{center}
 \begin{figure}[H]
+\centering
 \begin{tikzpicture}[>=Stealth, node distance=1.5cm, auto]
-\hspace{4cm}
   % LSTM cell as a pastel purple box with rounded corners
   \node[draw, fill=purple!30, rounded corners, minimum width=3cm, minimum height=2cm] (lstm) {LSTM};
 
@@ -727,13 +738,14 @@ Intuitively, $f_t$ can be viewed as how much of the previous cell state $c_{t-1}
 \caption{Simplified illustration of an \ac{lstm} layer}
 \label{fig:lstm}
 \end{figure}
-\end{center}
 
-As $c_t$ and $h_t$ are helpful when predicting future actions and states \cite{chung2024predictingfutureactionsreinforcement} when considering the \ac{drc} architecture, I hypothesize that the same holds when using a regular \ac{lstm} layer. See figure \ref{fig:lstm}.
+As $c_t$ and $h_t$ are helpful when predicting future actions and states \cite{chung2024predictingfutureactionsreinforcement} when considering the \ac{drc} architecture, I hypothesize that the same holds when using a regular \ac{lstm} layer. See \cref{fig:lstm}.
 
 \subsection{Frame Stacking}
 Frame stacking in \ac{rl} is a technique used to provide an agent with temporal context when tasked with choosing an action by combining the previous $n$ observations into a single input to the policy. In some environments an observation at a single timestep isn't enough to capture the full state. In the case of autonomous vehicles a single observation might not have information on whether a car is standing still or in motion, and the velocity of a car is important to take into account when making an action.
+
 If we have an observation space of 18, and we want to stack the previous 4 frames to feed into a fully connected input layer to a \ac{nn} we would insted of having the input $o_t$, where $o_t$ is a vector of size 18, we would instead get $$s_t = [o_t, o_{t-1}, o_{t-2}, o_{t-3}]$$ which is a $18\times4$ matrix, which we flatten into a single vector of size 72. If we instead of having a fully connected input layer, have a \ac{cnn} or another architecture that takes spatial context into consideration when processing an input, we would not flatten it.
+
 Frame stacking does not give the \ac{nn} architecture memory, however it does provide the network with short term temporal context. I hypothesize that for event and state prediction for an agent, having information about previous observations and their transitions is helpful for predicting how the state will change in the future. In the case of autonomous vehicles its natural to assume that knowing the speed of which a vehicle has been moving will be relevant when trying to predict where it will be $n$ steps into the future.
 
 \section{Statistical tests}
@@ -745,7 +757,9 @@ The two statistical tests we perform both assume the distribution is Gaussian. T
 
 \subsection{Students t-test}
 The null hypothesis chosen, $H_0$, is that the method provides no change in expected performance. To confirm that the difference in performance between baseline and our method is statistically significant I performed an independent one-tailed t-test, i.e. I calculated the likelihood that the increase in observed performance, or a higher increase in performance, happened by chance, and not because the true mean of the performance of the developed method is increased from baseline.
+
 We bootstrapped the full dataset several times, i.e. created new datasets by sampling with replacement from the original datasets, and trained my prediction \acp{nn} 
+
 on every dataset. From this we get a distribution of performances that we can use to perform a t-test and get a $p$-value. If this $p$-value is lower than a specified threshold value $\alpha$ I consider the result to be statistically significant. I set $\alpha = 0.05$.
 
 Formally: 
@@ -785,13 +799,13 @@ CI = \bar{x} \pm 1.96 \cdot \frac{s}{\sqrt{n}}
 
 \section{Environments}
 \label{sec:env_meth}
-For a better understanding of what state and event predictions refer to in my experiments, it is important to understand what type of environments the methods to extract states events are used in. In section \ref{sec:simpl_env} we describe the Simple Spread environment and in section \ref{sec:kaz_env} we describe the Knights Archers Zombies environment.
+For a better understanding of what state and event predictions refer to in my experiments, it is important to understand what type of environments the methods to extract states events are used in. In \cref{sec:simpl_env} we describe the Simple Spread environment and in \cref{sec:kaz_env} we describe the Knights Archers Zombies environment.
 
 \subsection{Simple Spread}
 \label{sec:simpl_env}
 I used simple\_spread\_v3, the 3rd version of the environment. In the Simple Spread environment there are $n$ agents, and $n$ landmarks. Simple spread is a cooperative environment where the goal of an agent is for all the agents to reach a landmark, without colliding with the other agents. The agents are modeled as circles and the landmarks as dots. This environment was chosen partially for its simplicity, and the intuitive understanding of what features humans would consider important in such a setting. Developing our methods for this environment should also be relatively efficient due to the observation space of size 18, which is smaller than most other PettingZoo environments, and as such training the prediction \acp{nn} and calculation of feature importance is less computationally expensive. The global reward, $R_g$, is the negative total distance from each landmark to the closest agent measured with euclidean distance and the local reward, $R_l$, is $-1$ for every agent a given agent is colliding with.
 
-Both continuous and discrete actions are available, I went with discrete. In the discrete action space each agent has the ability to idle, move up, move down, move left, or move right. I used $n=3$ and local ratio $0.5$, i.e. the reward, $R$, for an agent is $R = 0.5\times R_g + 0.5\times R_l$. See figure \ref{fig:simple_spread_env}
+Both continuous and discrete actions are available, I went with discrete. In the discrete action space each agent has the ability to idle, move up, move down, move left, or move right. I used $n=3$ and local ratio $0.5$, i.e. the reward, $R$, for an agent is $R = 0.5\times R_g + 0.5\times R_l$. See \cref{fig:simple_spread_env}
 
 A critical state are states where the agents actions strongly impact returns. As returns are correlated with rewards a critical state is likely a state where agents might collide or make significant progress on getting closer to the landmark.
 
@@ -806,7 +820,7 @@ A critical state are states where the agents actions strongly impact returns. As
 \label{sec:kaz_env}
 I used knights\_archers\_zombies\_v10, the 10th version of the environment. The KAZ environment has a maximum of $n$ archers, a maximum of $m$ knights, and a maximum number of zombies $k$. The environment initializes with $n$ archers, $m$ knights and 0 zombies. The goal is for the archers and knights to kill zombies. Zombies spawn at the top border, at a set spawn rate, and travel down the screen moving randomly to the left or right. If an archer hits a zombie with an arrow it gets a reward of 1, and if a knight hits a zombie with a mace it gets a reward of 1. Once a zombie gets hit it dies. If a zombie collides with an agent the agent dies. The game ends once all agents are dead, a zombie reaches the bottom of the screen or some max length is reached.
 
-For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The action space is discrete and allows the agents to idle, move forward, rotate clockwise, rotate counter clockwise, and attack. The observation space is either image based or vector based. I will use vector based for my experiments, which makes it a size of 135. See figure \ref{fig:kaz_env}
+For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The action space is discrete and allows the agents to idle, move forward, rotate clockwise, rotate counter clockwise, and attack. The observation space is either image based or vector based. I will use vector based for my experiments, which makes it a size of 135. See \cref{fig:kaz_env}
 
 In the Knights Archers Zombies environment a critical state might be a state where an agent could die or is about to shoot an arrow that might kill a zombie, as these states are associated with changes in returns, immediate in the case of killing a zombie and delayed lower returns in the case of dying as an agent, as this does not incur a penalty, but it does make the agent unable to gain future rewards.
 
@@ -824,7 +838,7 @@ This section will describe the details of how we create the policies for the env
 There are a lot of options when deciding what library to use when designing \ac{rl} policies. I decided to use the library RLlib by Ray. The main benefits of this library is ease of implementation when working on heterogeneous agents, as each type of agent requires a specifically trained network to perform well. It also has scalability \cite{rayrllib}. It is required to train several policies for the creation of this thesis, therefore scalability when optimizing a policy is helpful.
 
 \subsection{Policy construction}
-I used a \ac{ppo} algorithm when optimizing my policy, because this method outperforms other algorithms in several environments in the continuous observation domain \cite{schulman2017proximalpolicyoptimizationalgorithms}, as well as the fact that is it applicable to \ac{marl} systems. The policy architecture consisted of an input layer with the observation of the environment as the size, two hidden layers of size 64, the hyperbolic tangent function, see \ref{eq:tanh}, colloquially known as tanh as the hidden layer activation function. This function is used for its "s-shape", bounding values from $y=-1$ to $y=1$, see figure \ref{fig:tanh}. The output layer has the size of the action space of the agent. For the \ac{lstm} policies I included a layer containing $64$ \ac{lstm} cells.
+I used a \ac{ppo} algorithm when optimizing my policy, because this method outperforms other algorithms in several environments in the continuous observation domain \cite{schulman2017proximalpolicyoptimizationalgorithms}, as well as the fact that is it applicable to \ac{marl} systems. The policy architecture consisted of an input layer with the observation of the environment as the size, two hidden layers of size 64, the hyperbolic tangent function, see \cref{eq:tanh}, colloquially known as tanh as the hidden layer activation function. This function is used for its "s-shape", bounding values from $y=-1$ to $y=1$, see \cref{fig:tanh}. The output layer has the size of the action space of the agent. For the \ac{lstm} policies I included a layer containing $64$ \ac{lstm} cells.
 
 \begin{equation}
 \label{eq:tanh}
@@ -881,9 +895,24 @@ After the policy has been created, for some experiments I append a softmax layer
 \]
 where \( \mathbf{z} = (z_1, z_2, \ldots, z_K) \) is a vector in \( \mathbb{R}^K \). I.e. if we have an action space $n=5$, then $K=5$. $\sigma(\mathbf{z})_i$ is the likelihood of action $i$. This transformation has the property of when summing across $i$, which also has $K$ different possible values, we always get $1$, which is to be expected since it represents a likelihood. This is a common trick to improve performance for \acp{nn} applications.
 
+\section{Summary}
+In short, this section describes what I will explore with the experiments.
+
+\subsection{Event and state prediction}
+I aim to predict event and state. The event I will predict are critical states, and the part of the state I will predict is future position. Critical states are defined as states with a high maximum logit difference. I will train \acp{nn} with auxiliary information to find what auxiliary information is most helpful to predict events and states. 
+
+\subsection{Auxiliary information}
+When predicting states and action I will include both actions and feature importance. The actions I include will be encoded as both integer and a one-hot vector. The feature importances will be attributed by using Integrated Gradients, or Shapley values. In total I will train 9 \ac{nn} in each case, one for each combination of action and explanation.
+
+\subsection{Statistical test}
+I will perform t-tests on the final performance of the \acp{nn} I have trained to discover whether the results are statistically significant, and I will otherwise perform confidence intervals for graphs.
+
+\subsection{RL setup}
+I will train a PPO algorithm in the simple spread environment, as well as the knights archers zombies environment, with small policies to perform the experiments on, after i use the policies trained to create datasets.
 
 \chapter{Experiments}
-This chapter will discuss the details on how i perform the experiments, as well as discussing and analyzing the results of these experiments. The experiment described in \ref{sec:exp_1} will be about detecting the effects of actions and feature importance and their ability to elucidate the intent of a policy as aforementioned, the experiment described in \ref{sec:exp_2} explores if and how temporal information can be used to explain the intent of a policy, and the experiments described in \ref{sec:exp_4} explores how to alter the event and state prediction networks to improve predictions.
+\label{chap:exp}
+This chapter will discuss the details on how i perform the experiments, as well as discussing and analyzing the results of these experiments. The experiment described in \cref{sec:exp_simpl} will be about detecting the effects of actions and feature importance and their ability to elucidate the intent of a policy as aforementioned, the experiments described in \cref{sec:exp_lstm} and \cref{sec:exp_stack} explores if and how temporal information can be used to explain the intent of a policy, and the experiments described in \cref{sec:exp_param} explores how to alter the event and state prediction networks to improve predictions.
 
 \section{General experimental setup}
 I have several \acp{nn} for each experiment. The \acp{nn} have two hidden layers of size 64 each, the activation function $tanh$, and outputs either part of the state, $(x,y)$ coordinates for an agent for state prediction, or a single value, whether the trajectory contains a critical state or not, for event prediction. The experiments attempt to test whether my developed methods have an effect on event and state predictions, how impactful these effects are and what contributes to whether the effect is significant or not.I trained them with a scheduler which would divide learning rate by $3$ from an original of $1e-4$, down to a minimum of $1e-6$ whenever the calculated loss on the validation set stopped decreasing. All training was stopped after 200 epochs.
@@ -892,7 +921,8 @@ I have several \acp{nn} for each experiment. The \acp{nn} have two hidden layers
 For the state prediction I initially trained a \ac{nn}, $state_{base}$ to take the observations made by a type of agent from step $n$, $Obs_n$, and output the $x$ and $y$ coordinates of the same agent at step $n+m$ in a trajectory. The dataset $D_{pos}$ was constructed such that each data point was from a different trajectory $\tau$, to make sure all the data points were independent of each other, in order to make sure the \ac{nn} did not learn any such connection. Each data point is a pairing of values $(Obs_n, (x_{n+m},y_{n+m}))$. The variable $n$ was chosen randomly for each trajectory while $m$ stayed as a constant, in my case $m=10$. I would for example have $50000$ trajectories, each trajectory contains $2$ archers, so we would have a dataset of size $100000$. $100000$ observations and their corresponding positions $10$ steps into the future. We assume that both archers use the same policy as they are homogeneous.
 
 \subsection{Event prediction neural nets and datasets}
-I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See section \ref{sec:event_state_meth}. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $4$ steps, $(Obs_n, crit)$, where $crit$ is a binary value, 0, for non critical states, or 1, for critical states.
+I also trained a \ac{nn} for event prediction, $event_{base}$. The event we trained a network to predict was whether an agent would encounter a critical state or not. See \cref{sec:event_state_meth}. The dataset $D_{crit}$ was similar to $D_{pos}$, however instead of positions, it would contain whether the agent would encounter a critical state within the next $4$ steps, $(Obs_n, crit)$, where $crit$ is a binary value, 0, for non critical states, or 1, for critical states.
+
 I consider the accuracy of $event_{base}$ and the average error measured in euclidean distance of $state_{base}$ to be the baselines i compare results for including action against in the first experiment. I will train other \acp{nn} with different sets of auxiliary information as well, and compare the performance of these \acp{nn} to their baselines.
 
 
@@ -901,11 +931,7 @@ $event_{base}$ and $state_{base}$ are as mentioned considered baselines for comp
 
 Only The dataset, and therefore also the input layer, was different between the runs. I trained each network until improvement was negligible, for a maximum of 1000 epochs, which none of the networks reached, with a learning rate scheduler that decreased learning rate when loss reached a plateau, which was measured on a validation set. The scheduler divided learning rate by 3 each time more than 10 epochs had passed since last time it lowered learning rate and the loss had decreased by less than 0.0001. The learning rate had an initial value of 0.0001 and once the learning rate dropped below $10^{-6}$ I considered the training as stagnated.
 
-\section{Action and explanation inclusion}
-\label{sec:exp_1}
-As aforementioned this experiment explores how including action and explanations improves event and state predictions on the Simple Spread and Knights Archers Zombies environment.
-
-\subsection{setup}
+\subsection{Action and explanation inclusion}
 I enhanced both the dataset $D_{pos}$ and $D_{crit}$ with a series of other data. For both datasets I included the action, encoded by an integer from $0$ to $n_{acts}$, i.e. the amount of actions an agent has available, taken at $Obs_n$ for each data point, to use as input for an \ac{nn}. I then trained two \acp{nn} with the same architecture as $state_{base}$ and $event_{base}$ respectively, and once again measured accuracy for the event predictor net with included action, and average error for the state predictor net with included action. If the predictions improved I considered the action to be useful on its own for the predictions in the given environment.
 
 This section will go into detail on how I included actions and explanations.
@@ -919,27 +945,23 @@ After creating datasets with actions encoded different ways I also created two f
 \subsubsection{Softmaxing the policy output}
 When softmaxing the output of the policy when computing Shapley Values and Integrated Gradients, the feature importances reflect what features were most influential to an agents confidence. If you do not softmax the output the feature attributions do not necessarily reflect confidence but rather better reflect the expectation og how good the chosen action is. Both of these could be useful when predicting future actions, so I will do both methods and analyze the results.
 
-\subsubsection{Result presentation}
-In total I trained 18 neural networks per environment, one for each dataset constructed, and compared the results for accuracy on the event prediction networks and the results for average error on the state prediction networks. I repeated this experiment for a few different environments to explore if the results vary depending on environment.
+\subsection{Result presentation}
+In total I trained 18 neural networks per policy, one for each dataset constructed, and compared the results for accuracy on the event prediction networks and the results for average error on the state prediction networks. I repeated this experiment for a few different environments and policies to explore if the results vary depending on environment or policy.
 
 All results are presented in tables, with asterisks marking statistical significance, and italics used for baseline value.
 
-\subsection{Results}
-This section of the first experiment is divided into many subsections. First we will perform this experiment on a well trained policy on the simple spread environment, twice, first with softmaxed policy outputs for feature importance attribution, then without softmaxing the policy outputs. We will also observe the effects on event and state prediction when truncating training after reaching a decent policy performance but not as strong as in the first part of the experiment. For the sake of brevity I will only repeat the experiments with the highest increase in performance for the truncated training.
+\section{Simple Spread}
+\label{sec:exp_simpl}
+Here we will perform the experiments in the Simple Spread environment, first when softmaxing the policy, then without the softmax activation function, and then we will perform the experiment on a non-optimal policy.
 
-Then after discovering the effects of these sub-experiments I will repeat some experiments on the Knights Archers Zombies environment to discover how the effects differ in that environment. I will also perform the experiments on both archers and knights to see how the results differ when considering different agents in the same environment.
+\subsection{Setup}
+The first experiment is divided into multiple subsections. First we will perform this experiment on a well trained policy on the simple spread environment, twice, first with softmaxed policy outputs for feature importance attribution, then without softmaxing the policy outputs. We will also observe the effects on event and state prediction when truncating training after reaching a decent policy performance but not as strong as in the first part of the experiment. For the sake of brevity I will only repeat the experiments with the highest increase in performance for the truncated training.
 
-\begin{figure}[H]
-    \centering
-    \import{images/simple_spread_v3/no_memory/agent}{pred_models_losses_plot.pgf}
-	\label{fig:pred_losses}
-    \caption{Loss on evaluation set for state prediction in the Simple Spread environment}
-\end{figure}
-
-\subsubsection{Simple Spread with Softmax Activation}
+\subsection{Simple Spread with Softmax Activation}
 All explainability methods in this section will refer to when explaining softmaxed outputs.
 
-On state predictions for the Simple Spread environment, the inclusion of explanation methods are not shown to be an improvement over baseline. It is possible that in the case of predicting positions, the observation along with action is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require training time, or a larger network. I will investigate this further in this experiment as well as \ref{sec:exp_4}. See table \ref{tab:state_simpl}.
+
+On state predictions for the Simple Spread environment, the inclusion of explanation methods are not shown to be an improvement over baseline. It is possible that in the case of predicting positions, the observation along with action is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require training time, or a larger network. I will investigate this further in this experiment as well as \cref{sec:exp_param}. See \cref{tab:state_simpl}.
 
 \begin{center}
 \captionof{table}{Average error for state prediction on the Simple Spread environment, mean over 10 computations}
@@ -977,10 +999,11 @@ One-hot & 0.737123*** & 0.713717 & 0.723357 \\
 \end{tabular}
 \end{center}
 
-\subsubsection{Simple Spread without Softmax Activation}
+\subsection{Simple Spread without Softmax Activation}
+\label{sec:simpl_no_sm}
 All explainability methods in this section will refer to when the outputs of the policy \ac{nn} is not softmaxed.
 
-On state prediction in the Simple Spread environment including explanations do not improve predictions. In all cases the observed accuracy gets meaningfully worse, which probably means in the case of future predictions, the explanations that are included require to be softmaxed for any meaningful improvement. It is worth to note that with sufficient training, and while avoiding overfitting, performance of the model after expanding the input should at most be equivalent to the unexpanded input model, as including more information makes it harder to distinguish relevant information, but does not decrease the quality or relevancy of relevant information. Softmaxing the output of the policy network can be considered normalization of feature importances so the value of one feature contains information on how important that feature is relatively to the complete explanation, which is not the case when not softmaxing the output of the policy as then the feature importances only paint a picture together, but contain less relevant information on their own. This is why it is not surprising to see performance drop when not softmaxing policy outputs. See table \ref{tab:state_simpl_log}.
+On state prediction in the Simple Spread environment including explanations do not improve predictions. In all cases the observed accuracy gets meaningfully worse, which probably means in the case of future predictions, the explanations that are included require to be softmaxed for any meaningful improvement. It is worth to note that with sufficient training, and while avoiding overfitting, performance of the model after expanding the input should at most be equivalent to the unexpanded input model, as including more information makes it harder to distinguish relevant information, but does not decrease the quality or relevancy of relevant information. Softmaxing the output of the policy network can be considered normalization of feature importances so the value of one feature contains information on how important that feature is relatively to the complete explanation, which is not the case when not softmaxing the output of the policy as then the feature importances only paint a picture together, but contain less relevant information on their own. This is why it is not surprising to see performance drop when not softmaxing policy outputs. See \cref{tab:state_simpl_log}.
 
 \begin{center}
 \captionof{table}{Average error for state prediction on the Simple Spread environment without frame stacking, mean over 10 computations}
@@ -1021,8 +1044,8 @@ One-hot & 0.738127*** & 0.751387*** & 0.730787 \\
 \end{center}
 
 
-\subsubsection{Truncated training}
-Before delving into the specifics of this experiment, I have chosen to perform the event prediction experiments with softmaxed policy outputs, and the state prediction experiments without softmaxed values on all future experiments, including \ref{sec:exp_2}, \ref{sec:exp_3} and \ref{sec:exp_4}.
+\subsection{Truncated training}
+Before delving into the specifics of this experiment, I have chosen to perform the event prediction experiments with softmaxed policy outputs, and the state prediction experiments without softmaxed values on all future experiments.
 
 In the case of state prediction on the Simple Spread environment, we get similar results to the case without truncated training, with the main difference being that we do not find statistical significance for improvement for the \ac{nn} with access to action encoded as integer.
 
@@ -1044,7 +1067,7 @@ One-hot & 0.121558*** & 0.125370 & 0.122298 \\
 \end{center}
 
 
-When looking at event prediction in the simple spread environment we can see that in the case of truncated training, whether the agent considers a state critical or not is easier to predict. In section \ref{sec:mld} we discussed how an agents certainty about choosing an action affects whether that state is considered critical or not. When the agents policy is not trained to be optimal an agent sometimes pick a suboptimal action, that it eventually learns is suboptimal, in states like these it will eventually learn to be more certain about what action is preferable, as we know, because otherwise it would not improve. Eventually an agent is certain about what action to choose in every state, and in the previous experiment where this was the case, and the policy had converged, we can see that its harder for a neural network to differentiate between states with higher and lower certainty. The baseline performance for the similar case where the only difference is training time for the agent, and therefore also performance of the agent was an accuracy of $0.705740$ compared to this case with the baseline accuracy of $0.725047$. That is an decrease of misclassified states from $1-0.705740 = 0.29426$ to $1-0.725047 = 0.274953$, which is a $1-\frac{0.274953}{0.29426}=0.06561\approx 6.5\%$. We can see an increase in performance in all cases, albeit less pronounced in the cases with explanations. One reason for why inclusion of explanation does not see as high of an increase in performance is possible that either the distinguishing information present in the case with the truncated training that enables the baseline to perform better is also partially present in the explanations, or the performance seen by including explanations is strong enough to improving it in the Simple Spread environment, might need a greater change than training time to achieve significant improvements. See table \ref{tab:event_simpl_trunc}.
+When looking at event prediction in the simple spread environment we can see that in the case of truncated training, whether the agent considers a state critical or not is easier to predict. In \cref{sec:mld} we discussed how an agents certainty about choosing an action affects whether that state is considered critical or not. When the agents policy is not trained to be optimal an agent sometimes pick a suboptimal action, that it eventually learns is suboptimal, in states like these it will eventually learn to be more certain about what action is preferable, as we know, because otherwise it would not improve. Eventually an agent is certain about what action to choose in every state, and in the previous experiment where this was the case, and the policy had converged, we can see that its harder for a neural network to differentiate between states with higher and lower certainty. The baseline performance for the similar case where the only difference is training time for the agent, and therefore also performance of the agent was an accuracy of $0.705740$ compared to this case with the baseline accuracy of $0.725047$. That is an decrease of misclassified states from $1-0.705740 = 0.29426$ to $1-0.725047 = 0.274953$, which is a $1-\frac{0.274953}{0.29426}=0.06561\approx 6.5\%$. We can see an increase in performance in all cases, albeit less pronounced in the cases with explanations. One reason for why inclusion of explanation does not see as high of an increase in performance is possible that either the distinguishing information present in the case with the truncated training that enables the baseline to perform better is also partially present in the explanations, or the performance seen by including explanations is strong enough to improving it in the Simple Spread environment, might need a greater change than training time to achieve significant improvements. See \cref{tab:event_simpl_trunc}.
 
 \begin{center}
 \captionof{table}{Accuracy for event prediction on the Simple Spread environment, with truncated training}
@@ -1063,9 +1086,161 @@ One-hot & 0.752537*** & 0.759440*** & 0.736893 \\
 \end{tabular}
 \end{center}
 
+\subsection{Analysis}
+In this section I will discuss the most interesting findings more in depth. I consider the most interesting findings to be when a correlation, other than trivial ones, were found.
 
-\subsubsection{Archers in the Knights Archers Zombies environment}
-In the case of state predictions on the Knights Archers Zombies environment the additions of feature importance does not seem to have any important impact as none of the improvements. The inclusion of actions seem to have made an impact on the accuracy of the state prediction, though this decrease in error might just stem from learned knowledge of how an action changes the state, rather than knowledge of how to extract intent from an action. See table \ref{tab:state_kaz}.
+
+When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See \cref{fig:crit_losses}.
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+	\label{fig:crit_losses}
+\end{figure}
+
+No obvious patterns emerge when looking at the performance during training on the knights archers zombies environment. All the \acp{nn} stagnate at similar epochs and descend at a similar pace. This likely means the explanations do not contain information relevant to predicting future position for this policy and these prediction networks.
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{pred_models_losses_plot_keep.pgf}
+    \caption{Loss on evaluation set for state prediction in the Simple Spread environment}
+	\label{fig:pred_losses}
+\end{figure}
+
+\subsubsection{About the figures}
+In all figures for feature value attribution on the event prediction and state prediction networks, only the 15 most influential features are included, to limit the size and density of the plots. It is natural to consider the features not included as not very influential for the predictions made.
+
+I categorise the Shapley plots created into 2 types. One is plots where the observation is included and the second is the plots of shapley values of only the explanation. Even though these plots look similar, the colours of the samples represents 2 different things. For the plots with observations the colour of the samples represents high or low observation values, compared to other observation values, while in the plots without observations the colour represents the value compared to the value of other importances. To keep meanings of colours consistent in all plot, most feature values in the plots with observations will be represented with yellow, a value larger than the largest observation value.
+
+\subsubsection{Event Prediction baseline}
+For event prediction in the simple spread environment, we can see that the placement of the landmarks is gets the highest mean of feature attribution values for predicting whether an agent will encounter a critical state or not. Interestingly, with the exception of comms, which were turned off so they are expected to be irrelevant for predicting events, the features with the lowest attributed values were all current agent positions. Since the rewards are structured so that collisions between agents are penalized, it would be natural to expect that positions would be important when considering large differences in logits, that does however not seem to be the case, especially interesting is that the agents own position is the least influential factor when predicting whether the agent is about to encounter a critical state. Intuitively you could consider the position of the landmarks to be important as two landmarks in close proximity to each other might be challenging to reach by two separate agents without those agents colliding with each other. \cref{fig:event_simpl_shap} Shapley value attribution on one baseline event prediction \ac{nn}.
+
+
+\begin{figure}[H]
+\centering
+\import{images/simple_spread_v3/no_memory/agent}{None_none_none_shap_keep.pgf}
+\caption{Shapley Values on event prediction in the Simple Spread environment without included action or explanation. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_simpl_shap}
+\end{figure}
+
+\subsubsection{Event prediction with Integrated Gradients}
+When including integrated gradients and action encoded as an integer for input to the event prediction networks, the Shapley values paint a picture of how influential the explanation especially is for the predictions. In \cref{fig:event_simpl_ig_shap} the Shapley values for the integrated gradients have been aggregated together to capture the importance of the entire explanation instead the influence of the explanation of each feature, which would be overshadowed by the observation of the agents importance. From the figure we can see that of the 50 instances plotted the explanation is, even in the case of the lowest Shapley value, more influential in predicting that the agent is about to encounter a critical state that any of the regular observations, even the instances with the highest attribution for regular observation values. This is not the case for predicting when the agent is not about to encounter a critical state, though the mean is still significantly more influential than the most influential instances of regular observations. Compared to the case in \cref{fig:event_simpl_shap} the variance in importance for observation features is reduced, and the order of the magnitudes seems arbitrary.
+
+Looking at the Shapley diagram of the Integrated gradients separated from the rest of the inputs for the \acp{nn} without access to action, we can see that there very likely is a correlation between the feature value of the integrated gradients and the Shapley values, which I did consider as a possibility when performing the experiment, but to reiterate, that is not the only correlation between the integrated gradients and whether the following sub-trajectory contains a critical state. See \cref{fig:event_simpl_ig_slice}.
+
+If we compare \cref{fig:event_simpl_ig_slice} to the Shapley diagram for the baseline network, \cref{fig:event_simpl_shap}, we see that the order of importance of observations correspond somewhat to the order of importance of integrated gradients. Beginning with landmarks, then the other agents, and then itself, with the exception of the importance of its own velocity, whose integrated gradients value is more important than observation value.
+The velocity of itself for an agent is more important when including Integrated Gradients than otherwise, both the observation value and the integrated gradient value, though its likely that importance in state $s_t$ for event prediction in sub-trajectory $s_{t+1}$ to $s_{t+5}$ is correlated to importance for choosing an action in state $s_t$, which means its expected that the order of importance for the integrated gradients are correlated to the order of importance of the observation values, since the feature value of an integrated gradient value is correlated to importance.
+
+If we take a look at the Shapley diagram for the best performing \ac{nn} for event prediction, the network with access to Integrated gradients and action encoded as one-hot, we observe that when aggregating one-hot Shapley values, they are the second most important component for predicting critical states. 
+
+\begin{figure}[H]
+    \centering
+\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_shap_keep.pgf}
+\caption{Shapley Values on event prediction in the Simple Spread environment without included action, with Aggregated shapley values for Integrated Gradients explanations. IG = Integrated Gradients, LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_simpl_ig_shap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_slice_shap_keep.pgf}
+\caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, without including action. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_simpl_ig_slice}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_shap.pgf}
+\caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, with including action represented with a one-hot vector. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_simpl_one-hot_ig_shap}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_slice_shap_keep.pgf}
+\caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, with including action represented with a one-hot vector. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_simpl_one-hot_ig_slice}
+\end{figure}
+
+\subsubsection{State prediction baseline}
+We can see from the Shapley diagram for state prediction on the Simple Spread environment that the baseline \ac{nn} acts intuitively. There is a strong correlation between all feature values of the observation and their Shapley values. This is likely partially due to the choice of what we want to predict, which I chose to be position. \cref{fig:state_simpl_shap} shows how influential each feature was for predicting the position along the $x$-axis, and as we can see from the diagram, all observation values related to $x$ position is more important than all observation values related to $y$ position, and very unsurprisingly, current position along the $x$-axis is the most important feature to predict future position along the $x$-axis.
+
+This diagram likely highlights one reason why including Shapley values or Integrated Gradients did not improve the prediction. It highlights that if the agents acts rationally, the observation on its own is enough to predict future position. When including action encoded as one-hot value everything that is true for baseline is still the case. Aggregated one-hot values are less important that information about $x$-axis, but more important than information about the $y$-axis. See \cref{fig:state_simpl_one-hot}. When looking at the Shapley values for the \ac{nn} which includes Shapley values in the input this plot, \cref{fig:state_simpl_shap_shap} confirms there is not relevant information in the Shapley values that the \ac{nn} was able to extract, with the aggregated Shapley values being more important than nothing but pos x and pos y, as well as comms, but the comms always have zero importance.
+
+When we find a correlation between feature values and Shapley values, where the features with correlations are the most influential ones, like we do in \cref{fig:event_simpl_ig_slice} and \cref{fig:state_simpl_shap}, we could train linear regression on the input. This would likely yield a decent result, would be inherently interpretable, and would drastically reduce training time. In these situations training a \ac{nn} is likely not optimal.
+
+\begin{figure}[H]
+    \centering
+\import{images/simple_spread_v3/no_memory/agent}{0_none_none_shap_keep.pgf}
+\caption{Shapley values for baseline state prediction in the simple spread environment for position along the $x$-axis. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:state_simpl_shap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/simple_spread_v3/no_memory/agent}{0_one-hot_none_shap.pgf}
+\caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:state_simpl_one-hot}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/simple_spread_v3/no_memory/agent}{0_none_shap_shap.pgf}
+\caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:state_simpl_shap_shap}
+\end{figure}
+
+\section{Knights Archers Zombies}
+In this section I will perform the experiments in the Knights Archers Zombies environment, first when using the knight as subject, then when using the archer.
+\label{sec:exp_kaz}. As mentioned the state prediction network uses softmaxed output, and the event prediction network does not. Otherwise the setup is the same as in \cref{sec:exp_simpl}.
+
+\subsection{Results for the Knights Archers Zombies environment}
+First we will analyze the results when using Knights as a subject, then we will analyze the environment with focus on Archers. The knights archers zombies environment has an observation space of 135 in our case, compared to 18 in the simple spread environment. This might mean we need a wider \ac{nn} to properly extract relevant information, both for the policy and the prediction networks. This also means most of the Shapley values are not shown in the diagrams.
+
+\subsection{Knights in the Knights Archers Zombies environment}
+
+When looking at the results table for event prediction for knights in the knights archers zombies environment none of the additions made any significant difference. Interestingly one-hot encoding the action has been beneficial in every experiment so far, but makes no change in this case. See \cref{tab:event_kaz_knight}.
+
+\begin{center}
+\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Knights}
+\label{tab:event_kaz_knight}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & \textit{0.817595} & 0.808390 & 0.792460 \\
+Integer & 0.816145 & 0.807790 & 0.790675 \\
+One-hot & 0.816690 & 0.808910 & 0.789370 \\ 
+\bottomrule
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
+\end{tabular}
+\end{center}
+
+From \cref{tab:state_kaz_knight} we can see that also in this case the inclusion of actions or explanations did not improve the performance on the knights archers zombies environment.
+
+\begin{center}
+\captionof{table}{Average error for state prediction on the Knights Archers Zombies environment, for Knights}
+\label{tab:state_kaz_knight}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients & Shapley Values \\
+\midrule
+No action & \textit{0.033913} & 0.034564 & 0.035623 \\
+Integer & 0.034292 & 0.034769 & 0.035554 \\
+One-hot & 0.034618 & 0.034704 & 0.035322 \\
+\bottomrule
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
+\end{tabular}
+\end{center}
+
+
+\subsection{Archers in the Knights Archers Zombies environment}
+
+In the case of state predictions on the Knights Archers Zombies environment for Archers, the inclusion of Integrated gradients are beneficial for state prediction. The inclusion of actions seem to have made an impact on the accuracy of the state prediction, though this decrease in error might just stem from learned knowledge of how an action changes the state, rather than knowledge of how to extract intent from an action. As mentioned the output of the policy is softmaxed for the Shapley values but not for integrated gradients, and this has been the first time I got statistically significant results for state prediction, so I will reattempt state prediction without softmaxing policy output. See \cref{tab:state_kaz}.
 
 \begin{center}
 \captionof{table}{Average error, euclidean distance, for state prediction on the Knights Archers Zombies environment}
@@ -1074,102 +1249,201 @@ In the case of state predictions on the Knights Archers Zombies environment the 
 \toprule
  & No explanation & Integrated Gradients & Shapley Values \\
 \midrule
-No Action & 0.040901 & 0.040928 & 0.040728 \\
-Integer & 0.039768 & 0.040216 & 0.039505 \\
-One-hot & 0.038924 & 0.039241 & 0.038873 \\
+    No action & \textit{0.018424} & 0.017848*** & 0.018467 \\
+Integer & 0.018196 & 0.017810*** & 0.018021 \\
+One-hot & 0.017684*** & 0.017508 & 0.017582 \\
 \bottomrule
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
 \end{center}
 
-In the case of event predictions on the Knights Archers Zombies environment none of the additions seem to have any important impact as none of the improvements. As none of the changes are higher than $2\%$ we do not consider these results relevant. See table \ref{tab:event_kaz}.
+When using the archer as the subject in the knights archers zombies environment we find that including Integrated Gradients once again improves the prediction in all cases for included action. Similarly to knights in this environment including action as Integer or One-hot did not improve significantly over baseline performance.significantly over baseline performance.
 
 \begin{center}
-\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment}
-\label{tab:event_kaz}
+\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Archers}
+\label{tab:event_kaz_arch}
 \begin{tabular}{lrrr}
 \toprule
  & No explanation & Integrated Gradients & Shapley Values \\
 \midrule
-No action & 0.824400 & 0.829300 & 0.820650 \\
-Integer & 0.822700 & 0.828850 & 0.819250 \\
-One-hot & 0.824800 & 0.826700 & 0.822950 \\
+No action & \textit{0.754110} & 0.761055** & 0.722065 \\
+Integer & 0.753495 & 0.760745*** & 0.722615 \\
+One-hot & 0.754980 & 0.760970*** & 0.722590 \\
 \bottomrule
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
 \end{center}
 
-\subsubsection{Knights in the Knights Archers Zombies environment}
 
 
-
-\subsection{Analysis for the Simple Spread Environment}
-In this section I will discuss the most interesting findings more in depth. I consider the most interesting findings to be when a correlation, other than trivial ones, were found.
-
-When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See figure \ref{fig:crit_losses}.
+\subsection{Analysis}
+\subsubsection{Event Prediction for Knights}
+The plot of losses on an evaluation set during training is interesting in the case of critical state prediction on the knights archers zombies environment for knights. There are three clearly distinct groups of lines, with similar sample efficiency, and similar performance. As in the Simple Spread environment, Shapley values for critical state prediction, had both lower sample efficiency, and lower final performance than Integrated Gradients. How the curves differ in this Environment is that both Integrated Gradients and Shapley Values seem to reach some local optimum that is different from the optimum found by the network when neither Shapley Values nor Integrated Gradients are included. The training time to reach stagnation is significantly longer than both with Shapley Values and Integrated Gradients, but it does not take too long, about 75 epochs to reach the performance of integrated gradients at epoch 50, to surpass Integrated Gradients in performance, and it has both higher data efficiency and better final performance than the \ac{nn} with access to Shapley values. See \cref{fig:event_knight_losses}.
 
 \begin{figure}[H]
-    \centering
-    \input{images/simple_spread_v3/no_memory/agent/crit_models_losses_plot.pgf}
-	\label{fig:crit_losses}
-    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/knight}{crit_models_losses_plot.pgf}
+\caption{Plot for loss measure on event prediction during training of 9 different neural networks,halfway opaque colour is confidence interval}
+\label{fig:event_knight_losses}
 \end{figure}
 
-\subsubsection{About the figures}
-In all figures for feature value attribution on the event prediction and state prediction networks, only the 15 most influential features are included, to limit the size and density of the plots. It is natural to consider the features not included as not very influential for the predictions made.
-I categorise the Shapley plots created into 2 types. One is plots where the observation is included and the second is the plots of shapley values of only the explanation. Even though these plots look similar, the colours of the samples represents 2 different things. For the plots with observations the colour of the samples represents high or low observation values, compared to other observation values, while in the plots without observations the colour represents the value compared to the value of other importances. To keep meanings of colours consistent in all plot, most feature values in the plots with observations will be represented with yellow, a value larger than the largest observation value.
+When looking at the Shapley Diagram of event prediction for knights in the knights archers zombies environment, \cref{fig:event_kaz_knight}, for the \ac{nn} with best observed performance, the baseline, it appears differently than most of the Shapley diagrams we have looked at so far. Here most features have Shapley values that seems to belong to one of two groups, where each group has similar feature value, with high variance between the groups and low variance within. The data efficiency for the \acp{nn} without included explanation is significantly higher in the knights archers zombies environment than in the simple spread environment. It is possible that these fact that the Shapley diagram appears with these groups is related to the fact that the data efficiency is so different.
 
-\subsubsection{Event Prediction baseline}
-For event prediction in the simple spread environment, we can see that the placement of the landmarks is gets the highest mean of feature attribution values for predicting whether an agent will encounter a critical state or not. Interestingly, with the exception of comms, which were turned off so they are expected to be irrelevant for predicting events, the features with the lowest attributed values were all current agent positions. Since the rewards are structured so that collisions between agents are penalized, it would be natural to expect that positions would be important when considering large differences in logits, that does however not seem to be the case, especially interesting is that the agents own position is the least influential factor when predicting whether the agent is about to encounter a critical state. Intuitively you could consider the position of the landmarks to be important as two landmarks in close proximity to each other might be challenging to reach by two separate agents without those agents colliding with each other. Figure \ref{fig:event_simpl_shap} Shapley value attribution on one baseline event prediction \ac{nn}.
+In the simple spread environment we observed that when truncating training before reaching an optimal policy the accuracy for event prediction, when not including explanations increased compared to the optimal policy, but including Shapley values and Integrated gradients reached similar performance. A similar effect could be happening here, where a policy network with two hidden layers of size 64 is too small to reach close to optimal performance, and therefore get a better performance without explanations. It is also possible that Integrated Gradients and Shapley Values dont contain information that is not already present in the observation, just on a format that is simpler to extract for a \ac{nn}.
 
+When looking at the Shapley diagram for the \ac{nn} with access to Integrated Gradients we can see that the Integrated Gradients are important for prediction. As this \ac{nn} converged faster than the \acp{nn} without included explanations, it is not surprising that these values are also more important for the final performance. The regular observation values still have this tendency to split into two groups when measuring importance. See \cref{fig:event_kaz_knight_ig}. When looking at the Shapley values for the Integrated Gradients separately they do not display the same correlation we observed for the simple spread environment, with higher feature values being correlated with higher Shapley values. It is possible that with some type of transfer training, where we introduce explanations gradually as it trains, we could leverage the explanations to improve on the predictions made without explanations. See \cref{fig:event_kaz_knight_ig_slice}.
 
-\begin{center}
 \begin{figure}[H]
-\label{fig:event_simpl_shap}
-\import{images/simple_spread_v3/no_memory/agent}{None_none_none_shap.pgf}
-\caption{Shapley Values on event prediction in the Simple Spread environment without included action or explanation. LM = Landmark, Vel = Velocity, Pos = Position.}
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_none_shap.pgf}
+\caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_kaz_knight}
 \end{figure}
-\end{center}
 
-\subsubsection{Event prediction with Integrated Gradients}
-When including integrated gradients and action encoded as an integer for input to the event prediction networks, the Shapley values paint a picture of how influential the explanation especially is for the predictions. In figure \ref{fig:event_simpl_ig_shap} the Shapley values for the integrated gradients have been aggregated together to capture the importance of the entire explanation instead the influence of the explanation of each feature, which would be overshadowed by the observation of the agents importance. From the figure we can see that of the 50 instances plotted the explanation is, even in the case of the lowest Shapley value, more influential in predicting that the agent is about to encounter a critical state that any of the regular observations, even the instances with the highest attribution for regular observation values. This is not the case for predicting when the agent is not about to encounter a critical state, though the mean is still significantly more influential than the most influential instances of regular observations. Compared to the case in figure \ref{fig:event_simpl_shap} the variance in importance for observation features is reduced, and the order of the magnitudes seems arbitrary.
-
-\begin{center}
 \begin{figure}[H]
-\label{fig:event_simpl_ig_shap}
-\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_shap.pgf}
-\caption{Shapley Values on event prediction in the Simple Spread environment with included action represented as an integer, and Aggregated shapley values for Integrated Gradients explanations. IG = Integrated Gradients, LM = Landmark, Vel = Velocity, Pos = Position.}
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_ig_shap.pgf}
+\caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_kaz_knight_ig}
 \end{figure}
-\end{center}
 
-
-Looking at the Shapley diagram of the Integrated gradients separated from the rest of the inputs for the \acp{nn} without access to action, we can see that there very likely is a correlation between the feature value of the integrated gradients and the Shapley values, which I did consider as a possibility when performing the experiment, but to reiterate, that is not the only correlation between the integrated gradients and whether the following sub-trajectory contains a critical state. See figure \ref{fig:event_simpl_ig_slice}.
-If we compare figure \ref{fig:event_simpl_ig_slice} to the Shapley diagram for the baseline network, \ref{fig:event_simpl_shap}, we see that the order of importance of observations correspond somewhat to the order of importance of integrated gradients. Beginning with landmarks, then the other agents, and then itself, with the exception of the importance of its own velocity, whose integrated gradients value is more important than observation value.
-The velocity of itself for an agent is more important when including Integrated Gradients than otherwise, both the observation value and the integrated gradient value, though its likely that importance in state $s_t$ for event prediction in sub-trajectory $s_{t+1}$ to $s_{t+5}$ is correlated to importance for choosing an action in state $s_t$, which means its expected that the order of importance for the integrated gradients are correlated to the order of importance of the observation values, since the feature value of an integrated gradient value is correlated to 
-
-
-\begin{center}
 \begin{figure}[H]
-\label{fig:event_simpl_ig_slice}
-\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_slice_shap.pgf}
-\caption{Shapley Values on event prediction in the Simple Spread environment with included action represented as an integer, and Aggregated shapley values for Integrated Gradients explanations. IG = Integrated Gradients, LM = Landmark, Vel = Velocity, Pos = Position.}
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_ig_slice_shap.pgf}
+\caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
+\label{fig:event_kaz_knight_ig_slice}
 \end{figure}
-\end{center}
+
+
+\subsubsection{State Prediction for Knights}
+When looking at the plot of losses in the case of predicting future position for knights in the knights archers zombies environment, it looks like all the observed means of \ac{nn} performance are within the confidence intervals of every other observed mean of performance, meaning that any observed difference is not significant and the networks did not manage to find any meaningful data in the auxiliary information provided. See \cref{fig:state_knight_losses}.
+
+Because the confidence intervals are so high, its possible that with more runs we would find some statistical difference. There are methods to try to reduce this CI when training, a high CI is undesirable in cases where we want a random sample to be predictable, as we would in a practical application of future prediction. There are several potential causes and remedies to lower the CI observed. 
+
+Since we see the curves diverge early it is possible that state prediction for knights is sensitive to weights initialization, and using another type of initialization might make early training robust to this divergence. All the weights for the \acp{nn} I have trained were initialized from a random uniform distribution. If I instead used a normal distribution, like normal Xavier initialization, we could avoid the problem of early exploding or vanishing gradients\cite{xavier_init}.
+
+Another culprit might be that a large initial $LR$s changes the weights enough to jump into different valleys in the loss landscape, and the exploration isnt high enough to discover other, possibly deeper, valleys. It is also possible that the different bootstrapped datasets are not representative, but given the amount of samples of $100000$ which is enough to avoid overfitting in every other experiment, which are usually quite similar, I think this is unlikely.
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/knight}{pred_models_losses_plot.pgf}
+\caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
+\label{fig:state_knight_losses}
+\end{figure}
+
+\subsubsection{Event Prediction for Archers}
+
+In the case of event prediction for Archers, the plots of the loss curves during training when not including integrated gradients looks similar to the corresponding plot for knights, except for the fact that the observation, and possibly Shapley values, contain less information about whether the agent is about to encounter a critical state that the \ac{nn} is able to extract. Including Integrated Gradients seems to improve predictions however. We have not found that including actions improves performance in this case either. See \cref{fig:event_archer_losses}.
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{crit_models_losses_plot.pgf}
+\caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
+\label{fig:event_archer_losses}
+\end{figure}
+
+There are several reasons for it might be the case that Integrated Gradients are beneficial for archers and not knights. In all cases where Integrated Gradients have improved predictions the accuracy of the \acp{nn} arrived at approximately $75\%$. See \cref{tab:crit_simpl_log}, \cref{tab:event_simpl_trunc}, \cref{tab:event_kaz_arch}. It is possible that Integrated Gradients along with the observation is often enough to get predictions to approximately $75\%$, but does not help after that.
+
+The improvement in performance is relatively small, and from the loss curves it may seem that the training for no included explanation happens so similarly to the integrated gradients inclusion that an assumption one could make is that the Integrated Gradients help, but are not important to predictions. If we look at \cref{fig:event_archer_ig_shap}, we can see however, that this is not the case.
+
+Even though the performances of the different \acp{nn} are similar between simple spread environment and knights archers zombies environment are similar, and the loss curves for no included action but included IG are similar, except for the fact that it converges faster in the KAZ environment, the Shapley plot for the integrated gradients is very different. As a reminder, \cref{fig:event_simpl_ig_slice}, had a seemingly positive linear correlation between feature values and Shapley values, \cref{fig:event_archer_ig_slice} does not display this, which suggests that the trivial correlation described in \cref{sec:simpl_no_sm} is not the correlation which improves performance.
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_ig_shap.pgf}
+\caption{Shapley values for event prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
+\label{fig:event_archer_ig_shap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_ig_slice_shap.pgf}
+\caption{Shapley values of Integrated Gradients for event prediction in the Knights Archers Zombies environment.}
+\label{fig:event_archer_ig_slice}
+\end{figure}
+
+% \begin{figure}[H]
+% \centering
+% \import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_none_shap.pgf}
+% \caption{Shapley values for baseline event prediction in the Knights Archers Zombies environment.}
+% \label{fig:event_archer_none_shap}
+% \end{figure}
+
+
+\subsubsection{State Prediction for Archers}
+
+The plot of losses for state prediction on the Knights Archers Zombies environment, \cref{fig:state_archer_losses}, shows that the training for all 9 datasets are similar to each other, with similar data efficiency and similar performance. Barely visible on the plots are confidence intervals, because they are very slim. As we saw in table \cref{tab:state_kaz} we know that the increases in performance when including One-hot with no explanation (pink), no action and Integrated Gradients (orange) and action encoded as integer with integrated gradients (purple) are all highly statistically significant. Comparing this to \cref{fig:state_knight_losses} we can observe that in the same environment, predicting the same element of the state could yield different results. While performance and sample efficiency are similar for the 9 \acp{nn} trained for knights, the relative confidence intervals for knights were the highest we have measured so far, compared to for archers where they are the lowest.
+
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{pred_models_losses_plot.pgf}
+\caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
+\label{fig:state_archer_losses}
+\end{figure}
+
+In this thesis $x$-position refers to lateral position, and $y$-position refers to longitudinal position, $y=0$ is where zombies spawn, and $y=1$ is where the episode ends if a zombie reaches it, in the rendered environment. See \cref{kaz_env}.
+
+If we look at the diagram of Shapley values for predicting $x$-position in the Knights Archers Zombies environment, \cref{fig:state_archer_ig_shap_0}, when including Integrated Gradients, their aggregated values do not show up among the 15 most important values, meaning that they are not important for predicting but are useful for making small adjustments to the prediction. Compared to the Shapley diagrams for event prediction when Integrated Gradients always show up as most important. Its likely that integrated gradients on their own is not enough to predict position well, at least for a small \acp{nn}, but is enough to predict critical states.
+
+When looking at the Shapley values of the Integrated Gradients disaggregated, we can see that none of them have a very high impact on prediction. In this case we can see that the integrated gradients for arrows and self are more beneficial to performance than others, as out of the top 15 Shapley values, 11 of them refers to arrows, though all of them have low values and usually lie in the range $(-0.004, 0.004)$. See \cref{fig:state_archer_ig_slice_0}. 
+
+If we instead look at the diagram of Shapley values for predicting $y$-position, the aggregated Integrated Gradients do show up among the top 15 features, as the 13th most important, out of 136. See \cref{fig:state_archer_ig_shap_1}.
+
+When we disaggregate these values we see that also for $y$-position, out of the top 15 values, arrows account for 11 of them. Integrated Gradients are more beneficial when looking at $y$-position, which may mean the agent cares more about $y$-position than $x$-position, so the Integrated Gradients carry more information about future $y$-position, than future $x$-position. But also in this case are they not very impactful, usually ranging between $(-0.015,0.01)$.
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{0_none_ig_shap.pgf}
+\caption{Shapley values for $x$-position prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
+\label{fig:state_archer_ig_shap_0}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{0_none_ig_slice_shap.pgf}
+\caption{Shapley values for $x$-position prediction in the Knights Archers Zombies environment, only Integrated Gradients.}
+\label{fig:state_archer_ig_slice_0}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{1_none_ig_shap.pgf}
+\caption{Shapley values for $y$-position prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
+\label{fig:state_archer_ig_shap_1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\import{images/knights_archers_zombies_v10/no_memory/archer}{1_none_ig_slice_shap.pgf}
+\caption{Shapley values for $y$-position prediction in the Knights Archers Zombies environment, only Integrated Gradients.}
+\label{fig:state_archer_ig_slice_shap_1}
+\end{figure}
 
 
 \section{LSTM hidden values and cell states inclusion}
-\label{sec:exp_2}
-In this experiment I will include \ac{lstm} hidden values and cell states, $(h,c)$ and observe the effects on performance as well including explanations and exploring how the effects differ in experiment from the experiment in section \ref{sec:exp_1}.
+\label{sec:exp_lstm}
+In this experiment I will include \ac{lstm} hidden values and cell states, $(h,c)$ and observe the effects on performance as well including explanations and exploring how the effects differ in experiment from the experiment in \cref{sec:exp_simpl}.
 
 \subsection{Setup}
 There are two main ways of including temporal information in reinforcement learning policies. The first is to include more than just the last observation as input, known as frame stacking. Another design I implemented, that also includes temporal information for the policy is a design that includes an \ac{lstm} layer in that takes input from the second hidden layer and outputs to the last fully connected layer.
 
 We once again construct datasets which contain pairs on the form $(obs, pos)$ and $(obs, crit)$ respectively. For the observations for the policy using an \ac{lstm} we also include the hidden values and cell states, $(h,c)$, as part of the input for the event prediction and state prediction \acp{nn}, to include the temporal information used by the policy for the prediction \acp{nn}, similarly to in the case with frame stacking.
 
-I will once again train 18 neural networks for each environment and see how including the hidden values and cell states of the \ac{lstm} affect the predictions.
+\subsection{Actions and explanations}
+I will once again include actions and explanations for the \ac{lstm} networks to observe the effect in this case. We observed in experiment one that actions encoded as one-hot vectors were more beneficial to the performance of the models than actions encoded as integers. We will therefore not include integers in this experiment and onwards.
+
+The same applies to the explanations. For event predictions Integrated Gradients performed better, and for state prediction Shapley values performed better. Therefore I will not include Shapley values for event prediction or integrated gradients for state prediction in this experiment and onwards.
 
 \subsection{Results}
-I will first discuss the results when performing this experiment in the Simple Spread environment, and then in the Knights Archers Zombies environment.
+I will first discuss the results when performing this experiment in the Simple Spread environment, and then in the Knights Archers Zombies environment, for both knights and archers. Presentation will be similar to the first experiment.
 
 \subsubsection{Simple Spread}
+
 \begin{center}
 \captionof{table}{Average error for state prediction on the Simple Spread environment with \ac{lstm} output and cell states}
 \label{tab:state_simpl_lstm}
@@ -1205,18 +1479,18 @@ One-hot & 0.728867 & 0.779600 & 0.742567 \\
 
 
 \section{Frame Stacking}
-\label{sec:exp_3}
+\label{sec:exp_stack}
 The other way I considered adding temporal information was frame stacking. In this experiment I will explore the effects of frame stacking for event and state prediction, first on the simple spread environment, and then on the knights archers zombies environment. 
 
 \subsection{Setup}
-As discussed in \ref{sec:exp_1}, I will be using softmaxed policy outputs when exploring state prediction, and I will not be using softmaxed policy outputs when exploring event prediction.
+As discussed in \cref{sec:exp_simpl}, I will be using softmaxed policy outputs when exploring state prediction, and I will not be using softmaxed policy outputs when exploring event prediction.
 
 \subsection{Results}
-The results for this experiment will be divided into section \ref{sec:simpl_exp3} for results on the simple spread environment and \ref{sec:kaz_exp3} for the knights archers zombies environment.
+The results for this experiment will be divided into \cref{sec:simpl_exp3} for results on the simple spread environment and \cref{sec:kaz_exp3} for the knights archers zombies environment.
 
 \subsubsection{Simple Spread}
 \label{sec:simpl_exp3}
-When we include frame stacking in the Simple Spread environment in our case we include the previous 3 observations as well so the total observation space has size $18\times 4 = 72$. This auxiliary information requires a new policy to be trained as the representation of the environment is different from the case without frame stacking. The baseline results are unchanged from the case without frame stacking, and all other improvements are less pronounced. See table \ref{tab:state_simpl_stack}.
+When we include frame stacking in the Simple Spread environment in our case we include the previous 3 observations as well so the total observation space has size $18\times 4 = 72$. This auxiliary information requires a new policy to be trained as the representation of the environment is different from the case without frame stacking. The baseline results are unchanged from the case without frame stacking, and all other improvements are less pronounced. See \cref{tab:state_simpl_stack}.
 
 \begin{center}
 \captionof{table}{Average error for state prediction on the Simple Spread environment with frame stacking}
@@ -1232,8 +1506,7 @@ One-hot & 0.305099 & 0.305001 & 0.298962 \\
 \end{tabular}
 \end{center}
 
-For event prediction on the Simple Spread environment with frame stacking the results are improved for no explanation included, and improved in some cases when considering explanations as well, from the results in the case without frame stacking. See table \ref{tab:event_simpl_stack}.
-
+For event prediction on the Simple Spread environment with frame stacking the results are improved for no explanation included, and improved in some cases when considering explanations as well, from the results in the case without frame stacking. See \cref{tab:event_simpl_stack}.
 
 \begin{center}
 \captionof{table}{Average accuracy for event prediction on the Simple Spread environment with frame stacking}
@@ -1249,15 +1522,16 @@ One-hot & 0.766567 & 0.812067 & 0.780700 \\
 \end{tabular}
 \end{center}
 
-\subsubsection{Knights Archers Zombies}
+\subsubsection{Archers in Knights Archers Zombies}
 \label{sec:kaz_exp3}
 
+\subsubsection{Knights in Knights Archers Zombies}
 \subsection{Analysis}
 
 
 \section{Hyperparameter Exploration}
-\label{sec:exp_4}
-In this experiment i will review some of the earlier experiments with a larger state and event prediction network. This exploration will reveal if there is relevant information in the auxiliary information included in experiments \ref{sec:exp_1} through \ref{sec:exp_3}. Though I will not repeat all experiments as training time would increase to an unreasonable amount of time in total if we were to retrain every single network.
+\label{sec:exp_param}
+In this experiment i will review some of the earlier experiments with a larger state and event prediction network. This exploration will reveal if there is relevant information in the auxiliary information included in the experiments in \cref{sec:exp_simpl} through \cref{sec:exp_stack}. Though I will not repeat all experiments as training time would increase to an unreasonable amount of time in total if we were to retrain every single network.
 
 \subsection{Setup}
 First we will reduce network size to containing 2 hidden layers with only 32 nodes in each layer, as opposed to 64 nodes in each layer in earlier experiments, and repeat the experiments where auxiliary information improved performance on event and state prediction.
@@ -1266,17 +1540,19 @@ Then we will expand network size to containing 3 hidden layers, of size 128 each
 
 \subsection{Results}
 
+
 \subsubsection{Smaller network}
 
 
 \subsubsection{Larger network}
 
+
 \subsection{Analysis}
 
 
 
-
 \chapter{Discussion}
+\label{chap:disc}
 In this chapter I will consider the limitations of my methods and future work that could be done to improve my methods or discover other interesting results.
 
 \section{Limitations}
@@ -1292,10 +1568,6 @@ Additionally, if a policy is not
 
 \section{Future work}
 In the example of autonomous vehicles, it is likely that a policy network with the same size I have worked with, i.e. 2 hidden layers of size 64 each, is not complex enough to capture the necessary correlations to drive a vehicle well. The correlations here are likely more complex than the correlations necessary to pilot the agents i have worked with well, and these correlations likely affect the performance of predicting future states and events with my methods. It is necessary to test all of these methods with larger policies and larger prediction networks in more complex environments to ascertain whether these methods are useful for applications other than theoretical research. 
-
-
-\chapter{Conclusion}
-This chapter will discuss what I achieved with my thesis in a broader sense and how this relates to the field of XRL.
 
 \section{Explainable Reinforcement Learning Evaluation}
 This section will describe how well the prediction \acp{nn} I developed fulfill some important criteria used to measure explanations. I will rank these on a scale low/medium/high, as formal tests do not exist for all of these, and are outside the scope of this thesis. Several of these measures are also subjective.
@@ -1337,9 +1609,15 @@ Actionability refers to whether the explanation impacts the users ability to tak
 \subsubsection{Trustworthiness}
 Trustworthiness reflects whether an explainability method promotes trust, or distrust, in a system. Future state and event prediction are two of the most important factors when deciding whether an agent is acting reasonably, and therefore promotes appropriate trust. The trustworthiness is therefore high.
 
-\section{Comparison with related works}
+
+\cite{chung2024predictingfutureactionsreinforcement}
 
 \section{Summary}
+
+\appendix
+
+\chapter{Diagrams}
+In appendix A are all diagrams that are referred to, but not necessary to see to keep up with the analysis of the experiments or otherwise.
 
 
 \printbibliography{}
