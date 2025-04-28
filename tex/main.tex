@@ -961,10 +961,9 @@ The first experiment is divided into multiple subsections. First we will perform
 All explainability methods in this section will refer to when explaining softmaxed outputs.
 
 
-On state predictions for the Simple Spread environment, the inclusion of explanation methods are not shown to be an improvement over baseline. It is possible that in the case of predicting positions, the observation along with action is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require training time, or a larger network. I will investigate this further in this experiment as well as \cref{sec:exp_param}. See \cref{tab:state_simpl}.
+On state predictions for the Simple Spread environment, the inclusion of explanation methods are not shown to be an improvement over baseline. It is possible that in the case of predicting positions, the observation along with action is enough to predict future position, if the policy is close to optimal, or that correlations between explanations and actions, and future position is harder to learn, and would therefore require training time, or a larger network. I will investigate this further in this experiment as well as \cref{sec:exp_param}. See \cref{tab:state_simpl}. 
 
 \begin{center}
-\captionof{table}{Average error for state prediction on the Simple Spread environment, mean over 10 computations}
 \label{tab:state_simpl}
 \begin{tabular}{lrrr}
 \toprule
@@ -974,16 +973,17 @@ No action & \textit{0.131317} & 0.133403 & 0.132936 \\
 Integer & 0.129741 & 0.136067 & 0.131426 \\
 One-hot & 0.123522*** & 0.128827 & 0.124774 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error for state prediction on the Simple Spread environment, mean over 10 computations}
 \end{center}
 
 When considering the event predictions for the Simple Spread environment the inclusion of explanations not not make a significant difference. The inclusion of action encoded as integer and as one-hot do reduce misclassifications by $1-\frac{1-0.717247}{1-0.704963} \approx 4.2\%$ and $1-\frac{1-0.737123}{1-0.704963} \approx 10.9\%$ respectively.
 
 \begin{center}
-\captionof{table}{Accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \label{tab:crit_simpl}
 \begin{tabular}{lrrr}
 \toprule
@@ -993,10 +993,12 @@ When considering the event predictions for the Simple Spread environment the inc
 Integer & 0.717247* & 0.704267 & 0.683190 \\
 One-hot & 0.737123*** & 0.713717 & 0.723357 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \end{center}
 
 \subsection{Simple Spread without Softmax Activation}
@@ -1006,7 +1008,6 @@ All explainability methods in this section will refer to when the outputs of the
 On state prediction in the Simple Spread environment including explanations do not improve predictions. In all cases the observed accuracy gets meaningfully worse, which probably means in the case of future predictions, the explanations that are included require to be softmaxed for any meaningful improvement. It is worth to note that with sufficient training, and while avoiding overfitting, performance of the model after expanding the input should at most be equivalent to the unexpanded input model, as including more information makes it harder to distinguish relevant information, but does not decrease the quality or relevancy of relevant information. Softmaxing the output of the policy network can be considered normalization of feature importances so the value of one feature contains information on how important that feature is relatively to the complete explanation, which is not the case when not softmaxing the output of the policy as then the feature importances only paint a picture together, but contain less relevant information on their own. This is why it is not surprising to see performance drop when not softmaxing policy outputs. See \cref{tab:state_simpl_log}.
 
 \begin{center}
-\captionof{table}{Average error for state prediction on the Simple Spread environment without frame stacking, mean over 10 computations}
 \label{tab:state_simpl_log}
 \begin{tabular}{lrrr}
 \toprule
@@ -1016,10 +1017,12 @@ No action & \textit{0.130958} & 0.145947 & 0.137418 \\
 Integer & 0.130880 & 0.157760 & 0.137155 \\
 One-hot & 0.123053*** & 0.155843 & 0.127923 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error for state prediction on the Simple Spread environment without frame stacking, mean over 10 computations}
 \end{center}
 
 For event prediction on the Simple Spread environment both including actions and explanations increase performance by a significant margin. Compared to the baseline accuracy the performance of the \ac{nn} when including one-hot encoded action without any explanation as input, the performance of the \ac{nn} when including Integrated Gradients without any action, as well as the performance of the combination of the two all increase by a significant margin, with the \ac{nn} with access of the combination of the two performing better than each of them did when included individually. The best performing network misclassified $1-0.705740 = 0.29426$ of instances, compared to $1-0.751387 = 0.248613$ the baseline, a decrease of $1-\frac{0.248613}{0.29426} = 0.155124 \approx 15\%$
@@ -1027,7 +1030,6 @@ For event prediction on the Simple Spread environment both including actions and
 It is worth to consider that there is a possible trivial correlation between including the feature importance for the maximum logit output, i.e. explanation for the chosen action, and whether the agent will encounter a critical state, as we consider states with high difference in maximum and minimum logit value as critical. Both integrated gradients, and Shapley values have the property of fully explaining the output from the features, i.e. the sum of the Integrated Gradients and the sum of the Shapley values both add up to the logit they are explaining. There is no direct correlation as the feature importance and explanation are from step $n = t$ in any given trajectory and the sub-trajectory considered is from step $n=t+1$ up to and including step $n=t+5$. I have not measured the correlation between the criticality of step $n$ and the criticality of the sub-directory considered, or the correlation between the maximum logit value in a state and the maximum logit difference in that state, so I do not know how impactful these are. Even in the extreme case of the entire increase in performance for included Shapley values is a direct result of this correlation, the increase in performance for included Integrated Gradients is meaningful compared to Shapley values, which reveals the fact that the correlations between critical states and explanations are not entirely trivial. This is confirmed by the fact that inclusion of Shapley values does not significantly improve predictions when also including one-hot values, but including Integrated gradients does significantly improve predictions.
 
 \begin{center}
-\captionof{table}{Average accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \label{tab:crit_simpl_log}
 \begin{tabular}{lrrr}
 \toprule
@@ -1037,10 +1039,12 @@ No action & \textit{0.705740} & 0.745593*** & 0.726290*** \\
 Integer & 0.723123*** & 0.748297*** & 0.734843*** \\
 One-hot & 0.738127*** & 0.751387*** & 0.730787 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \end{center}
 
 
@@ -1050,7 +1054,6 @@ Before delving into the specifics of this experiment, I have chosen to perform t
 In the case of state prediction on the Simple Spread environment, we get similar results to the case without truncated training, with the main difference being that we do not find statistical significance for improvement for the \ac{nn} with access to action encoded as integer.
 
 \begin{center}
-\captionof{table}{Average accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \label{tab:state_simpl_trunc}
 \begin{tabular}{lrrr}
 \toprule
@@ -1060,17 +1063,18 @@ No action & 0.128435 & 0.132283 & 0.129489 \\
 Integer & 0.127049 & 0.132629 & 0.128414 \\
 One-hot & 0.121558*** & 0.125370 & 0.122298 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average accuracy for event prediction on the Simple Spread environment, mean over 10 computations}
 \end{center}
 
 
 When looking at event prediction in the simple spread environment we can see that in the case of truncated training, whether the agent considers a state critical or not is easier to predict. In \cref{sec:mld} we discussed how an agents certainty about choosing an action affects whether that state is considered critical or not. When the agents policy is not trained to be optimal an agent sometimes pick a suboptimal action, that it eventually learns is suboptimal, in states like these it will eventually learn to be more certain about what action is preferable, as we know, because otherwise it would not improve. Eventually an agent is certain about what action to choose in every state, and in the previous experiment where this was the case, and the policy had converged, we can see that its harder for a neural network to differentiate between states with higher and lower certainty. The baseline performance for the similar case where the only difference is training time for the agent, and therefore also performance of the agent was an accuracy of $0.705740$ compared to this case with the baseline accuracy of $0.725047$. That is an decrease of misclassified states from $1-0.705740 = 0.29426$ to $1-0.725047 = 0.274953$, which is a $1-\frac{0.274953}{0.29426}=0.06561\approx 6.5\%$. We can see an increase in performance in all cases, albeit less pronounced in the cases with explanations. One reason for why inclusion of explanation does not see as high of an increase in performance is possible that either the distinguishing information present in the case with the truncated training that enables the baseline to perform better is also partially present in the explanations, or the performance seen by including explanations is strong enough to improving it in the Simple Spread environment, might need a greater change than training time to achieve significant improvements. See \cref{tab:event_simpl_trunc}.
 
 \begin{center}
-\captionof{table}{Accuracy for event prediction on the Simple Spread environment, with truncated training}
 \label{tab:event_simpl_trunc}
 \begin{tabular}{lrrr}
 \toprule
@@ -1080,10 +1084,12 @@ No action & \textit{0.725047} & 0.758307*** & 0.734053*** \\
 Integer & 0.731497* & 0.761020*** & 0.741317** \\
 One-hot & 0.752537*** & 0.759440*** & 0.736893 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Accuracy for event prediction on the Simple Spread environment, with truncated training}
 \end{center}
 
 \subsection{Analysis}
@@ -1202,7 +1208,6 @@ First we will analyze the results when using Knights as a subject, then we will 
 When looking at the results table for event prediction for knights in the knights archers zombies environment none of the additions made any significant difference. Interestingly one-hot encoding the action has been beneficial in every experiment so far, but makes no change in this case. See \cref{tab:event_kaz_knight}.
 
 \begin{center}
-\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Knights}
 \label{tab:event_kaz_knight}
 \begin{tabular}{lrrr}
 \toprule
@@ -1212,16 +1217,17 @@ No action & \textit{0.817595} & 0.808390 & 0.792460 \\
 Integer & 0.816145 & 0.807790 & 0.790675 \\
 One-hot & 0.816690 & 0.808910 & 0.789370 \\ 
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Knights}
 \end{center}
 
 From \cref{tab:state_kaz_knight} we can see that also in this case the inclusion of actions or explanations did not improve the performance on the knights archers zombies environment.
 
 \begin{center}
-\captionof{table}{Average error for state prediction on the Knights Archers Zombies environment, for Knights}
 \label{tab:state_kaz_knight}
 \begin{tabular}{lrrr}
 \toprule
@@ -1231,10 +1237,12 @@ No action & \textit{0.033913} & 0.034564 & 0.035623 \\
 Integer & 0.034292 & 0.034769 & 0.035554 \\
 One-hot & 0.034618 & 0.034704 & 0.035322 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error for state prediction on the Knights Archers Zombies environment, for Knights}
 \end{center}
 
 
@@ -1243,7 +1251,6 @@ One-hot & 0.034618 & 0.034704 & 0.035322 \\
 In the case of state predictions on the Knights Archers Zombies environment for Archers, the inclusion of Integrated gradients are beneficial for state prediction. The inclusion of actions seem to have made an impact on the accuracy of the state prediction, though this decrease in error might just stem from learned knowledge of how an action changes the state, rather than knowledge of how to extract intent from an action. As mentioned the output of the policy is softmaxed for the Shapley values but not for integrated gradients, and this has been the first time I got statistically significant results for state prediction, so I will reattempt state prediction without softmaxing policy output. See \cref{tab:state_kaz}.
 
 \begin{center}
-\captionof{table}{Average error, euclidean distance, for state prediction on the Knights Archers Zombies environment}
 \label{tab:state_kaz}
 \begin{tabular}{lrrr}
 \toprule
@@ -1253,16 +1260,17 @@ In the case of state predictions on the Knights Archers Zombies environment for 
 Integer & 0.018196 & 0.017810*** & 0.018021 \\
 One-hot & 0.017684*** & 0.017508 & 0.017582 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error, euclidean distance, for state prediction on the Knights Archers Zombies environment}
 \end{center}
 
 When using the archer as the subject in the knights archers zombies environment we find that including Integrated Gradients once again improves the prediction in all cases for included action. Similarly to knights in this environment including action as Integer or One-hot did not improve significantly over baseline performance.significantly over baseline performance.
 
 \begin{center}
-\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Archers}
 \label{tab:event_kaz_arch}
 \begin{tabular}{lrrr}
 \toprule
@@ -1272,10 +1280,12 @@ No action & \textit{0.754110} & 0.761055** & 0.722065 \\
 Integer & 0.753495 & 0.760745*** & 0.722615 \\
 One-hot & 0.754980 & 0.760970*** & 0.722590 \\
 \bottomrule
+\addlinespace[2pt]
 \multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
   \textsuperscript{**}$p<0.01$, 
   \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Accuracy for event prediction on the Knights Archers Zombies environment, for Archers}
 \end{center}
 
 
@@ -1394,7 +1404,7 @@ When looking at the Shapley values of the Integrated Gradients disaggregated, we
 
 If we instead look at the diagram of Shapley values for predicting $y$-position, the aggregated Integrated Gradients do show up among the top 15 features, as the 13th most important, out of 136. See \cref{fig:state_archer_ig_shap_1}.
 
-When we disaggregate these values we see that also for $y$-position, out of the top 15 values, arrows account for 11 of them. Integrated Gradients are more beneficial when looking at $y$-position, which may mean the agent cares more about $y$-position than $x$-position, so the Integrated Gradients carry more information about future $y$-position, than future $x$-position. But also in this case are they not very impactful, usually ranging between $(-0.015,0.01)$.
+When we disaggregate these values we see that also for $y$-position, out of the top 15 values, arrows account for 11 of them. Integrated Gradients are more beneficial when looking at $y$-position, which may mean the agent cares more about $y$-position than $x$-position, so the Integrated Gradients carry more information about future $y$-position, than future $x$-position. But also in this case are they not very impactful, usually ranging between $(-0.015,0.01)$. See \cref{fig:state_archer_ig_slice_shap_1}.
 
 \begin{figure}[H]
 \centering
@@ -1437,7 +1447,7 @@ We once again construct datasets which contain pairs on the form $(obs, pos)$ an
 \subsection{Actions and explanations}
 I will once again include actions and explanations for the \ac{lstm} networks to observe the effect in this case. We observed in experiment one that actions encoded as one-hot vectors were more beneficial to the performance of the models than actions encoded as integers. We will therefore not include integers in this experiment and onwards.
 
-The same applies to the explanations. For event predictions Integrated Gradients performed better, and for state prediction Shapley values performed better. Therefore I will not include Shapley values for event prediction or integrated gradients for state prediction in this experiment and onwards.
+The same applies to the explanations. For predictions Integrated Gradients performed better. Therefore I will not include Shapley values for predictions.
 
 \subsection{Results}
 I will first discuss the results when performing this experiment in the Simple Spread environment, and then in the Knights Archers Zombies environment, for both knights and archers. Presentation will be similar to the first experiment.
@@ -1445,7 +1455,6 @@ I will first discuss the results when performing this experiment in the Simple S
 \subsubsection{Simple Spread}
 
 \begin{center}
-\captionof{table}{Average error for state prediction on the Simple Spread environment with \ac{lstm} output and cell states}
 \label{tab:state_simpl_lstm}
 \begin{tabular}{lrrr}
 \toprule
@@ -1455,11 +1464,12 @@ No action & 0.306358 & 0.304827 & 0.305336 \\
 Integer & 0.306486 & 0.304529 & 0.306255 \\
 One-hot & 0.307398 & 0.305968 & 0.305619 \\
 \bottomrule
+\addlinespace[2pt]
 \end{tabular}
+\captionof{table}{Average error for state prediction on the Simple Spread environment with \ac{lstm} output and cell states}
 \end{center}
 
 \begin{center}
-\captionof{table}{Average accuracy for event prediction on the Simple Spread environment with \ac{lstm} output and cell states}
 \label{tab:event_simpl_lstm}
 \begin{tabular}{lrrr}
 \toprule
@@ -1469,7 +1479,12 @@ No action & 0.730967 & 0.775767 & 0.739200 \\
 Integer & 0.715100 & 0.778400 & 0.741933 \\
 One-hot & 0.728867 & 0.779600 & 0.742567 \\
 \bottomrule
+\addlinespace[2pt]
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average accuracy for event prediction on the Simple Spread environment with \ac{lstm} output and cell states}
 \end{center}
 
 \subsubsection{Knights Archers Zombies}
@@ -1490,43 +1505,54 @@ The results for this experiment will be divided into \cref{sec:simpl_exp3} for r
 
 \subsubsection{Simple Spread}
 \label{sec:simpl_exp3}
-When we include frame stacking in the Simple Spread environment in our case we include the previous 3 observations as well so the total observation space has size $18\times 4 = 72$. This auxiliary information requires a new policy to be trained as the representation of the environment is different from the case without frame stacking. The baseline results are unchanged from the case without frame stacking, and all other improvements are less pronounced. See \cref{tab:state_simpl_stack}.
+When we include frame stacking in the Simple Spread environment in our case we include the previous 3 observations as well so the total observation space has size $18\times 4 = 72$. This auxiliary information requires a new policy to be trained as the representation of the environment is different from the case without frame stacking. The performances of all the event prediction nets are decreased from the case without frame stacking, \cref{tab:crit_simpl_log}. See \cref{tab:state_simpl_stack}. In this case including Integrated Gradients did not improve predictions.
 
 \begin{center}
-\captionof{table}{Average error for state prediction on the Simple Spread environment with frame stacking}
 \label{tab:state_simpl_stack}
 \begin{tabular}{lrrr}
 \toprule
- & No explanation & Integrated Gradients & Shapley Values \\
+ & No explanation & Integrated Gradients \\
 \midrule
-No action & 0.303008 & 0.304275 & 0.298301 \\
-Integer & 0.289100 & 0.305222 & 0.291256 \\
-One-hot & 0.305099 & 0.305001 & 0.298962 \\
+No action & 0.693810 & 0.691320 \\
+One-hot & 0.705027*** & 0.692437 \\
 \bottomrule
+\addlinespace[2pt]
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error for event prediction on the Simple Spread environment with frame stacking}
 \end{center}
 
-For event prediction on the Simple Spread environment with frame stacking the results are improved for no explanation included, and improved in some cases when considering explanations as well, from the results in the case without frame stacking. See \cref{tab:event_simpl_stack}.
+For state prediction on the Simple Spread environment with frame stacking the performance of the \acp{nn} are improved when compared to the case without frame stacking, \ref{tab:state_simpl}. However, in this case as well, Integrated Gradient do not improve the predictions.
 
 \begin{center}
-\captionof{table}{Average accuracy for event prediction on the Simple Spread environment with frame stacking}
 \label{tab:event_simpl_stack}
 \begin{tabular}{lrrr}
 \toprule
- & No explanation & Integrated Gradients & Shapley Values \\
+ & No explanation & Integrated Gradients \\
 \midrule
-No action & 0.737900 & 0.80300 & 0.756633 \\
-Integer & 0.724767 & 0.804433 & 0.763100 \\
-One-hot & 0.766567 & 0.812067 & 0.780700 \\
+No action & 0.102830 & 0.104177 \\
+One-hot & 0.091574*** & 0.095747 \\
 \bottomrule
+\addlinespace[2pt]
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
 \end{tabular}
+\captionof{table}{Average error for state prediction on the Simple Spread environment with frame stacking}
 \end{center}
 
 \subsubsection{Archers in Knights Archers Zombies}
 \label{sec:kaz_exp3}
 
 \subsubsection{Knights in Knights Archers Zombies}
+
 \subsection{Analysis}
+In this section I will discuss the results from frame stacking, first in the Simple Spread environment, then in the Knights Archers Zombies environment.
+\subsubsection{Frame stacking on the Simple Spread environment}
+
+
 
 
 \section{Hyperparameter Exploration}
