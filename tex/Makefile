@@ -7,7 +7,6 @@ all: $(TARGET).pdf
 $(TARGET).pdf: $(TARGET).tex $(TARGET).bbl
 	$(PDFLATEX) $(TARGET).tex
 	$(PDFLATEX) $(TARGET).tex
-	rm -f $(TARGET).aux $(TARGET).bbl $(TARGET).blg $(TARGET).log $(TARGET).out $(TARGET).toc $(TARGET).lof $(TARGET).lot $(TARGET).bcf $(TARGET).run.xml
 	
 
 $(TARGET).bbl: $(TARGET).aux ref.bib
@@ -19,6 +18,4 @@ $(TARGET).aux: $(TARGET).tex
 clean:
 	rm -f $(TARGET).aux $(TARGET).bbl $(TARGET).blg $(TARGET).log $(TARGET).out $(TARGET).toc $(TARGET).lof $(TARGET).lot $(TARGET).bcf $(TARGET).run.xml
 
-cleanall: clean
-	rm -f $(TARGET).pdf
 
