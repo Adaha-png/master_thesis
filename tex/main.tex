@@ -205,7 +205,30 @@ Producing our own dataset has the benefit of no restrictions, other than hardwar
 
 The datasets produced will be sets of full or partial trajectories in given environments along with other relevant data like integrated gradient, or Shapley values for the observations in the trajectories. We use these datasets to train predictive \acp{nn} with two main types. Event prediction, for example whether an agent encounters a critical state within the next 10 timesteps, which could represent a dangerous situation for an autonomous vehicle, and state prediction, which for example could be the x and y coordinates of a given agent 10 timesteps into the future.
 
-We will first be focusing on including explanations for the observations and observe and analyze the effects on event and state predictors, then we will be using \ac{nn} policies with access to memory and include their representation of memory along with the observation, hidden values for lstm and once again observe and analyze effect on the predictors.
+I will first be focusing on including explanations for the observations and observe and analyze the effects on event and state predictors, then we will be using \ac{nn} policies with access to memory and include their representation of memory along with the observation, hidden values for \ac{lstm} and once again observe and analyze effect on the predictors.
+
+In this thesis I will follow the abstraction and design paradigms described in \cite{acm}.
+
+\subsection{Abstraction Paradigm}
+The second paradigm is rooted in scientific theory and follows these four steps.
+\begin{enumerate}
+    \item Form a hypothesis;
+    \item Construct a model and make a prediction;
+    \item Design an experiment and collect data;
+    \item Analyze results.
+\end{enumerate}
+A scientist should be able to complete these steps when model predictions disagree with experimental evidence.
+
+
+\subsection{Design Paradigm}
+The third paradigm is rooted in engineering, and follows these four steps.
+\begin{enumerate}
+    \item State requirements;
+    \item State specifications;
+    \item Design and implement the system;
+    \item Test the system.
+\end{enumerate}
+An engineer expects to be able to follow these steps.
 
 \section{Ethical considerations}
 \ac{marl} is an important field in development for military purposes\cite{military_marl}, and while this research is not supposed to effectivize warfare its possible that it ends up being relevant for unintended areas of research, including but not limited to military use-cases. This is especially the case because I aim to develop methods for general \ac{marl} use and not a specific area of research, like medicine or sports. It is more or less impossible to restrict access to these methods for specific areas of research.
@@ -820,13 +843,13 @@ A critical state are states where the agents actions strongly impact returns. As
 \label{sec:kaz_env}
 I used knights\_archers\_zombies\_v10, the 10th version of the environment. The KAZ environment has a maximum of $n$ archers, a maximum of $m$ knights, and a maximum number of zombies $k$. The environment initializes with $n$ archers, $m$ knights and 0 zombies. The goal is for the archers and knights to kill zombies. Zombies spawn at the top border, at a set spawn rate, and travel down the screen moving randomly to the left or right. If an archer hits a zombie with an arrow it gets a reward of 1, and if a knight hits a zombie with a mace it gets a reward of 1. Once a zombie gets hit it dies. If a zombie collides with an agent the agent dies. The game ends once all agents are dead, a zombie reaches the bottom of the screen or some max length is reached.
 
-For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The action space is discrete and allows the agents to idle, move forward, rotate clockwise, rotate counter clockwise, and attack. The observation space is either image based or vector based. I will use vector based for my experiments, which makes it a size of 135. See \cref{fig:kaz_env}
+For my experiments I used 2 archers, 2 knights, and a maximum of 10 zombies. The action space is discrete and allows the agents to idle, move forward, rotate clockwise, rotate counter clockwise, and attack. The observation space is either image based or vector based. I will use vector based for my experiments, which makes it a size of 135. See \cref{fig:kaz_env}. The input space is consistent size no matter how many arrows or zombies are currently on screen, the values for the missing entities are just always set to 0.
 
 In the Knights Archers Zombies environment a critical state might be a state where an agent could die or is about to shoot an arrow that might kill a zombie, as these states are associated with changes in returns, immediate in the case of killing a zombie and delayed lower returns in the case of dying as an agent, as this does not incur a penalty, but it does make the agent unable to gain future rewards.
 
 \begin{figure}[H]
     \centering
-    \fbox{\includegraphics[scale=0.3]{images/knights_archers_zombies_v10/015.png}}
+    \fbox{\includegraphics[scale=0.3]{images/knights_archers_zombies_v10_unstacked/015.png}}
     \caption{Rendered frame from the Knights Archers Zombies environment.}
     \label{fig:kaz_env}
 \end{figure}
@@ -1096,20 +1119,20 @@ One-hot & 0.752537*** & 0.759440*** & 0.736893 \\
 In this section I will discuss the most interesting findings more in depth. I consider the most interesting findings to be when a correlation, other than trivial ones, were found.
 
 
-When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See \cref{fig:crit_losses}.
+When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See \cref{fig:crit_losses_log}.
 
 \begin{figure}[H]
     \centering
-    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep.pgf}
+    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep2.pgf}
     \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
-	\label{fig:crit_losses}
+	\label{fig:crit_losses_log}
 \end{figure}
 
-No obvious patterns emerge when looking at the performance during training on the knights archers zombies environment. All the \acp{nn} stagnate at similar epochs and descend at a similar pace. This likely means the explanations do not contain information relevant to predicting future position for this policy and these prediction networks.
+No obvious patterns emerge when looking at the performance during training on the Simple Spread environment. All the \acp{nn} stagnate at similar epochs and descend at a similar pace. This likely means the explanations do not contain information relevant to predicting future position for this policy and these prediction networks. See \cref{fig:pred_losses}.
 
 \begin{figure}[H]
     \centering
-    \import{images/simple_spread_v3/no_memory/agent}{pred_models_losses_plot_keep.pgf}
+    \import{images/simple_spread_v3/no_memory/agent}{pred_models_losses_plot_keep2.pgf}
     \caption{Loss on evaluation set for state prediction in the Simple Spread environment}
 	\label{fig:pred_losses}
 \end{figure}
@@ -1125,7 +1148,7 @@ For event prediction in the simple spread environment, we can see that the place
 
 \begin{figure}[H]
 \centering
-\import{images/simple_spread_v3/no_memory/agent}{None_none_none_shap_keep.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{None_none_none_shap_keep2.pgf}
 \caption{Shapley Values on event prediction in the Simple Spread environment without included action or explanation. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_simpl_shap}
 \end{figure}
@@ -1142,28 +1165,48 @@ If we take a look at the Shapley diagram for the best performing \ac{nn} for eve
 
 \begin{figure}[H]
     \centering
-\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_shap_keep.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_shap_keep2.pgf}
 \caption{Shapley Values on event prediction in the Simple Spread environment without included action, with Aggregated shapley values for Integrated Gradients explanations. IG = Integrated Gradients, LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_simpl_ig_shap}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_slice_shap_keep.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{None_none_ig_slice_shap_keep2.pgf}
 \caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, without including action. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_simpl_ig_slice}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_shap.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_shap_keep2.pgf}
 \caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, with including action represented with a one-hot vector. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_simpl_one-hot_ig_shap}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_slice_shap_keep.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{None_one-hot_ig_slice_shap_keep2.pgf}
+
+When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See \cref{fig:crit_losses}.
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep2.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+	\label{fig:crit_losses}
+\end{figure}
+
+
+When looking at a plot of the mean losses on a validation set during training we can see that the time each network takes to reach convergence varies wildly, at which point their training was truncated. I observed that when performing the experiments with a set number of epochs, some \acp{nn}, did not converge at all while some \acp{nn} converged a high number of epochs before reaching the set maximum, which was 400, and when learning rate starts to drop they all converge shortly after. All \acp{nn} with access to Integrated Gradients as input converged with fewer than 300 epochs, with Integrated Gradients and One-hot converging with the fewest required epochs, as well as reaching the best performance. Interestingly all \acp{nn} with access to any form of explanation converged significantly faster than any of the \acp{nn} that do not have access to explanations. Seeing as the best performing network without access to Integrated Gradients was the network with access to one-hot and feature importance input, it is likely that in this case adding Shapley values is about as helpful as adding noise. In the case of no action or action encoded as integer we do see improvements for the respective networks with Shapley included as well. See \cref{fig:crit_losses}.
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep2.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+	\label{fig:crit_losses}
+\end{figure}
+
 \caption{Shapley Values for Integrated Gradients, on event prediction in the Simple Spread environment, with including action represented with a one-hot vector. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_simpl_one-hot_ig_slice}
 \end{figure}
@@ -1177,7 +1220,7 @@ When we find a correlation between feature values and Shapley values, where the 
 
 \begin{figure}[H]
     \centering
-\import{images/simple_spread_v3/no_memory/agent}{0_none_none_shap_keep.pgf}
+\import{images/simple_spread_v3/no_memory/agent}{0_none_none_shap_keep2.pgf}
 \caption{Shapley values for baseline state prediction in the simple spread environment for position along the $x$-axis. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:state_simpl_shap}
 \end{figure}
@@ -1256,7 +1299,7 @@ In the case of state predictions on the Knights Archers Zombies environment for 
 \toprule
  & No explanation & Integrated Gradients & Shapley Values \\
 \midrule
-    No action & \textit{0.018424} & 0.017848*** & 0.018467 \\
+No action & \textit{0.018424} & 0.017848*** & 0.018467 \\
 Integer & 0.018196 & 0.017810*** & 0.018021 \\
 One-hot & 0.017684*** & 0.017508 & 0.017582 \\
 \bottomrule
@@ -1296,7 +1339,7 @@ The plot of losses on an evaluation set during training is interesting in the ca
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/knight}{crit_models_losses_plot.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/knight_keep}{crit_models_losses_plot.pgf}
 \caption{Plot for loss measure on event prediction during training of 9 different neural networks,halfway opaque colour is confidence interval}
 \label{fig:event_knight_losses}
 \end{figure}
@@ -1309,21 +1352,21 @@ When looking at the Shapley diagram for the \ac{nn} with access to Integrated Gr
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_none_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/knight_keep}{None_none_none_shap.pgf}
 \caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_kaz_knight}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_ig_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/knight_keep}{None_none_ig_shap.pgf}
 \caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_kaz_knight_ig}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/knight}{None_none_ig_slice_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/knight_keep}{None_none_ig_slice_shap.pgf}
 \caption{Shapley values for state prediction in the simple spread environment for position along the $x$-axis, with included action encoded as one-hot. LM = Landmark, Vel = Velocity, Pos = Position.}
 \label{fig:event_kaz_knight_ig_slice}
 \end{figure}
@@ -1340,7 +1383,7 @@ Another culprit might be that a large initial $LR$s changes the weights enough t
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/knight}{pred_models_losses_plot.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/knight_keep}{pred_models_losses_plot.pgf}
 \caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
 \label{fig:state_knight_losses}
 \end{figure}
@@ -1351,8 +1394,8 @@ In the case of event prediction for Archers, the plots of the loss curves during
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{crit_models_losses_plot.pgf}
-\caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{crit_models_losses_plot.pgf}
+\caption{Plot for loss measure on event prediction during training of 9 different neural networks, translucent colour is confidence interval}
 \label{fig:event_archer_losses}
 \end{figure}
 
@@ -1364,21 +1407,21 @@ Even though the performances of the different \acp{nn} are similar between simpl
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_ig_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{None_none_ig_shap.pgf}
 \caption{Shapley values for event prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
 \label{fig:event_archer_ig_shap}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_ig_slice_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{None_none_ig_slice_shap.pgf}
 \caption{Shapley values of Integrated Gradients for event prediction in the Knights Archers Zombies environment.}
 \label{fig:event_archer_ig_slice}
 \end{figure}
 
 % \begin{figure}[H]
 % \centering
-% \import{images/knights_archers_zombies_v10/no_memory/archer}{None_none_none_shap.pgf}
+% \import{images/knights_archers_zombies_v10_unstacked/no_memory/archer}{None_none_none_shap.pgf}
 % \caption{Shapley values for baseline event prediction in the Knights Archers Zombies environment.}
 % \label{fig:event_archer_none_shap}
 % \end{figure}
@@ -1391,7 +1434,7 @@ The plot of losses for state prediction on the Knights Archers Zombies environme
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{pred_models_losses_plot.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{pred_models_losses_plot.pgf}
 \caption{Plot for loss measure on state prediction during training of 9 different neural networks, translucent colour is confidence interval}
 \label{fig:state_archer_losses}
 \end{figure}
@@ -1408,28 +1451,28 @@ When we disaggregate these values we see that also for $y$-position, out of the 
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{0_none_ig_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{0_none_ig_shap.pgf}
 \caption{Shapley values for $x$-position prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
 \label{fig:state_archer_ig_shap_0}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{0_none_ig_slice_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{0_none_ig_slice_shap.pgf}
 \caption{Shapley values for $x$-position prediction in the Knights Archers Zombies environment, only Integrated Gradients.}
 \label{fig:state_archer_ig_slice_0}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{1_none_ig_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{1_none_ig_shap.pgf}
 \caption{Shapley values for $y$-position prediction in the Knights Archers Zombies environment, with included Integrated Gradients.}
 \label{fig:state_archer_ig_shap_1}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\import{images/knights_archers_zombies_v10/no_memory/archer}{1_none_ig_slice_shap.pgf}
+\import{images/knights_archers_zombies_v10_unstacked/no_memory/archer_keep}{1_none_ig_slice_shap.pgf}
 \caption{Shapley values for $y$-position prediction in the Knights Archers Zombies environment, only Integrated Gradients.}
 \label{fig:state_archer_ig_slice_shap_1}
 \end{figure}
@@ -1447,7 +1490,7 @@ We once again construct datasets which contain pairs on the form $(obs, pos)$ an
 \subsection{Actions and explanations}
 I will once again include actions and explanations for the \ac{lstm} networks to observe the effect in this case. We observed in experiment one that actions encoded as one-hot vectors were more beneficial to the performance of the models than actions encoded as integers. We will therefore not include integers in this experiment and onwards.
 
-The same applies to the explanations. For predictions Integrated Gradients performed better. Therefore I will not include Shapley values for predictions.
+The same applies to the explanations. For predictions Integrated Gradients performed better. Therefore I will not include Shapley values for predictions in future experiments.
 
 \subsection{Results}
 I will first discuss the results when performing this experiment in the Simple Spread environment, and then in the Knights Archers Zombies environment, for both knights and archers. Presentation will be similar to the first experiment.
@@ -1513,7 +1556,7 @@ When we include frame stacking in the Simple Spread environment in our case we i
 \toprule
  & No explanation & Integrated Gradients \\
 \midrule
-No action & 0.693810 & 0.691320 \\
+    No action & \textit{0.693810} & 0.691320 \\
 One-hot & 0.705027*** & 0.692437 \\
 \bottomrule
 \addlinespace[2pt]
@@ -1524,7 +1567,7 @@ One-hot & 0.705027*** & 0.692437 \\
 \captionof{table}{Average error for event prediction on the Simple Spread environment with frame stacking}
 \end{center}
 
-For state prediction on the Simple Spread environment with frame stacking the performance of the \acp{nn} are improved when compared to the case without frame stacking, \ref{tab:state_simpl}. However, in this case as well, Integrated Gradient do not improve the predictions.
+For state prediction on the Simple Spread environment with frame stacking the performance of the \acp{nn} are improved when compared to the case without frame stacking, \ref{tab:state_simpl}. However, in this case as well, Integrated Gradient do not improve the predictions. The baseline seems to be an improvement over the case without frame stacking, however since the policy behind is different, doing statistical tests would require retraining several policies and not just the prediction nets, which I did not do due to the time and computational constraints of this thesis.
 
 \begin{center}
 \label{tab:event_simpl_stack}
@@ -1532,7 +1575,7 @@ For state prediction on the Simple Spread environment with frame stacking the pe
 \toprule
  & No explanation & Integrated Gradients \\
 \midrule
-No action & 0.102830 & 0.104177 \\
+    No action & \textit{0.102830} & 0.104177 \\
 One-hot & 0.091574*** & 0.095747 \\
 \bottomrule
 \addlinespace[2pt]
@@ -1546,36 +1589,100 @@ One-hot & 0.091574*** & 0.095747 \\
 \subsubsection{Archers in Knights Archers Zombies}
 \label{sec:kaz_exp3}
 
+When frame stacking in the knights archers zombies environment for predicting future position. This means the archer agent is more unpredictable or its hard to extract its intent from its observations. Compared to the results in \cref{tab:state_kaz}, this is somewhat surprising as the agent seemed to act predictably in that case. We also do not find any improvement for Integrated Gradients in this case. See \cref{tab:state_kaz_archer_stack}.
+
+\begin{center}
+\label{tab:state_kaz_archer_stack}
+\begin{tabular}{lrrr}
+\toprule
+ & No explanation & Integrated Gradients \\
+\midrule
+    No action & \textit{0.135039} & 0.135840 \\
+One-hot & 0.135768 & 0.140605 \\
+\bottomrule
+\addlinespace[2pt]
+\multicolumn{3}{l}{\textsuperscript{***}$p<0.001$, 
+  \textsuperscript{**}$p<0.01$, 
+  \textsuperscript{*}$p<0.05$}
+\end{tabular}
+\captionof{table}{Average error for state prediction on the Simple Spread environment with frame stacking}
+\end{center}
+
 \subsubsection{Knights in Knights Archers Zombies}
+
+
+
 
 \subsection{Analysis}
 In this section I will discuss the results from frame stacking, first in the Simple Spread environment, then in the Knights Archers Zombies environment.
-\subsubsection{Frame stacking on the Simple Spread environment}
 
 
+\subsubsection{State Prediction for the Simple Spread Environment with Frame Stacking}
+
+If we look at the plot of Losses for state prediction on the Simple Spread environment we can see that the final mean loss of the \acp{nn} with no action but access to integrated gradients is lower than its counterpart without access to integrated gradients, despite the mean average error being higher, as is shown in \cref{tab:state_simpl_stack}. There are likely scenarios where these two values correspond and we manage to decrease average error by including Integrated Gradients. One-hot encoding outperforms both of them anyways, and Integrated Gradients do not lower loss in this case.
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{pred_models_losses_plot_keep.pgf}
+    \caption{Loss on evaluation set for state prediction in the Simple Spread environment}
+	\label{fig:pred_losses_stack}
+\end{figure}
+
+\subsubsection{Event Prediction for the Simple Spread Environment with Frame Stacking}
+
+For predicting critical states in the Simple Spread environment with frame stacking including Integrated Gradients do not improve accuracy. Looking at the plot of losses, \cref{fig:crit_losses_stack}, we can see that the data efficiency with included Integrated Gradients is higher, but it does not manage to keep improving past approximately 150 epochs. This plot looks similar to \cref{fig:event_knight_losses}, and it is possible a similar issue arises.
+
+One reason I can think of for what could cause this, even though in the case without frame stacking we do find that Integrated Gradients are beneficial for predicting critical states. One is that when we expand the size of the Integrated Gradients, which corresponds to the observation size, encountering a local minima that is different from the global minima increases. This could be a result of low exploration early which leads to a local minima where learning from observation is impossible.
+
+Earlier I discussed the possibility that Integrated Gradients on their own might be enough to reach a decent performance when predicting critical states, and if this is the case here it might mean we need a larger network to capture the correlations between Integrated Gradients and Critical states. It is also possible that Integrated Gradients on their own are not enough to reach a decent performance when frame stacking even if it was enough before, or its possible that it never was enough on its own. 
+
+\begin{figure}[H]
+    \centering
+    \import{images/simple_spread_v3/no_memory/agent}{crit_models_losses_plot_keep.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+	\label{fig:crit_losses_stack}
+\end{figure}
 
 
-\section{Hyperparameter Exploration}
-\label{sec:exp_param}
-In this experiment i will review some of the earlier experiments with a larger state and event prediction network. This exploration will reveal if there is relevant information in the auxiliary information included in the experiments in \cref{sec:exp_simpl} through \cref{sec:exp_stack}. Though I will not repeat all experiments as training time would increase to an unreasonable amount of time in total if we were to retrain every single network.
+\subsubsection{State Prediction for the Knights Archers Zombies Environment with Frame Stacking for Archers}
 
-\subsection{Setup}
-First we will reduce network size to containing 2 hidden layers with only 32 nodes in each layer, as opposed to 64 nodes in each layer in earlier experiments, and repeat the experiments where auxiliary information improved performance on event and state prediction.
+From the plot of losses, \cref{fig:pred_losses_kaz_archer_stack}, we can see that also in this case does having access to Integrated Gradients improve data efficiency, however it still converges earlier than the networks without access to integrated gradients. The confidence intervals are also wide in this case, especially for the networks with access to integrated gradients. Which was not the case without frame stacking. There could be a correlation between the confidence intervals and the size of the input layer in some cases. Its possible this could be remedied  
 
-Then we will expand network size to containing 3 hidden layers, of size 128 each and repeat some of the experiments where we did not manage to improve performance to see the effects of a larger network size. If we do find significant improvement with a larger network size, it is likely that some of the auxiliary information does contain relevant information, but a network size with 2 hidden layers of size 64 each is too simple to meaningfully extract some of the information found in the more complex auxiliary information, like hidden and cell states.
+\begin{figure}[H]
+    \centering
+    \import{images/knights_archers_zombies_v10/no_memory/archer}{pred_models_losses_plot.pgf}
+    \caption{Plot of losses during training of the state prediction networks on the Knights Archers Zombies environment with frame stacking}
+	\label{fig:pred_losses_kaz_archer_stack}
+\end{figure}
 
-\subsection{Results}
-
-
-\subsubsection{Smaller network}
-
-
-\subsubsection{Larger network}
+In the diagram of Shapley values for the knights archers zombies environment with frame stacking for archers, \cref{fig:state_kaz_archer_stack}, similar values are aggregated. All different homogeneous entities get their similar features aggregated together. E.g. Zombie 1s y velocity in observation 2, represented as "vel y zombie 1 2", get aggregated with zombie 3s y velocity in observation 0, represented as "vel y zombie 3 0", along with all other "vel y zombie ...", to make the feature "vel y zombie". This is done to reduce the amount of features from 1085 to 32, in the most severe case, which includes integrated gradients as well as one-hot encoded action. 
+It is possible that this massive input compared our relatively small \ac{nn} with two hidden layers of size 64 is too much to make sense of. Even in the smallest case  It would be worthwhile to reattempt this experiment with a larger neural network, and dataset to avoid overfitting, to experiment with if that provides similar results to the case without frame stacking, or even an improvement over my results.
 
 
-\subsection{Analysis}
+Even though the data efficiency of the \ac{nn} with access to both actions encoded as one-hot and Integrated Gradients was the observed highest it does not show up among the top 15 feature importances of the 32 we have. Though, since the Shapley diagrams are only for one \ac{nn} at a time, its not certain that this is always the case considering the high confidence intervals though. See \cref{fig:state_kaz_archer_stack_ig} It also does not show up on the Shapley diagram when not including Integrated Gradients, which means its not important to make predictions but it does benefit the neural nets, though as mentioned earlier this might simply stem from the learned knowledge of the transition function, and might not reveal any hidden correlation. This improvement was also not found to be statistically significant so it could be coincidental, that it seems to perform better on the loss plot.
+
+The Shapley values for zombies' features show up among the top of the values in the Shapley diagrams, meaning that the zombies positions and movements are the most important when considering positions. In the Shapley diagrams for the case without frame stacking arrows seem to be more important, but its possible that if we aggregated the Shapley values in those diagrams as well they would display zombies as more important, or vice versa.
+
+\begin{figure}[H]
+    \centering
+    \import{images/knights_archers_zombies_v10/no_memory/archer}{1_one-hot_ig_shap.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+    \label{fig:state_kaz_archer_stack_ig}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \import{images/knights_archers_zombies_v10/no_memory/archer}{1_one-hot_none_shap.pgf}
+    \caption{Plot of losses during training of the event prediction networks on the Simple Spread environment, without softmaxing policy outputs.}
+    \label{fig:state_kaz_archer_stack}
+\end{figure}
 
 
+\subsubsection{Event Prediction for the Knights Archers Zombies Environment with Frame Stacking for Archers}
+
+\subsubsection{State Prediction for the Knights Archers Zombies Environment with Frame Stacking for Knights}
+
+\subsubsection{Event Prediction for the Knights Archers Zombies Environment with Frame Stacking for Knights}
 
 \chapter{Discussion}
 \label{chap:disc}
@@ -1595,6 +1702,8 @@ Additionally, if a policy is not
 \section{Future work}
 In the example of autonomous vehicles, it is likely that a policy network with the same size I have worked with, i.e. 2 hidden layers of size 64 each, is not complex enough to capture the necessary correlations to drive a vehicle well. The correlations here are likely more complex than the correlations necessary to pilot the agents i have worked with well, and these correlations likely affect the performance of predicting future states and events with my methods. It is necessary to test all of these methods with larger policies and larger prediction networks in more complex environments to ascertain whether these methods are useful for applications other than theoretical research. 
 
+There is also a reinforcement learning policy structure known as the \ac{gtrxl} that contain memory information of previous states reconstructed into meta states to be used by a transformer architecture. It could be interesting to perform similar experiments to this thesis but on this kind of memory as well as the lstm memory, though other prediction models are possibly needed, seeing as I did not manage to improve performance with the current prediction models.
+
 \section{Explainable Reinforcement Learning Evaluation}
 This section will describe how well the prediction \acp{nn} I developed fulfill some important criteria used to measure explanations. I will rank these on a scale low/medium/high, as formal tests do not exist for all of these, and are outside the scope of this thesis. Several of these measures are also subjective.
 
@@ -1612,7 +1721,7 @@ Faithfulness is a measure of how well the explanations identify influential feat
 
 
 \subsubsection{Consistency}
-TO-DO explore whether similar models behave similarly.
+Consistency describes whether explanations intended to explain similar elements, are similar. From the Shapley diagrams we can see that the different networks often use similar features and explanations to make the predictions. This will have to be explored in other experiments than ones performed in this thesis, however from what I have found, I would give these methods a consistency of medium to high.
 
 \subsubsection{Completeness}
 Completeness describes whether the explanation covers all aspects of the models reasoning, and not just a subset of features. Seeing as we do use the entire observation of the policy, the output of the policy and the feature importances of the observations, my explanation gets a score of medium. Feature importance is not enough to describe the reasoning of the model, and as such we are missing essential components for a high completeness explanation.
@@ -1635,15 +1744,11 @@ Actionability refers to whether the explanation impacts the users ability to tak
 \subsubsection{Trustworthiness}
 Trustworthiness reflects whether an explainability method promotes trust, or distrust, in a system. Future state and event prediction are two of the most important factors when deciding whether an agent is acting reasonably, and therefore promotes appropriate trust. The trustworthiness is therefore high.
 
-
-\cite{chung2024predictingfutureactionsreinforcement}
+\section{Comparison to related works}
+\cite{chung2024predictingfutureactionsreinforcement} found that inner states are helpful in future action and event prediction. I did not attempt to predict actions, but found that explanations can be useful when predicting the critical state event, as well as position in some cases. I did not find that inner states were as useful as explanations, but I did not perform the experiments on agents shown to exhibit planning like behaviour. This paper practices on much more complex models, and longer training time. Therefore it is possible that with more complex prediction models, I would be able to make use of the internal information.
 
 \section{Summary}
 
-\appendix
-
-\chapter{Diagrams}
-In appendix A are all diagrams that are referred to, but not necessary to see to keep up with the analysis of the experiments or otherwise.
 
 
 \printbibliography{}
