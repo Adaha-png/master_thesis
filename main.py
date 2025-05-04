@@ -47,8 +47,10 @@ def train_new_policy(should_tune, timesteps, memory="no_memory"):
     # gamma = trial.suggest_float("gamma", 0.8, 0.999)
     # lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
 
+    # lr = 1e-4
+    # gamma = 0.8
     lr = 1e-4
-    gamma = 0.8
+    gamma = 0.80
     print(f"Using learning rate: {lr}, discount factor: {gamma:.3f}")
 
     _, policy_path = rllib_train.run_train(
@@ -88,7 +90,7 @@ def get_policy(
 
 
 if __name__ == "__main__":
-    explainer_extras = ["none", "ig", "shap"]
+    explainer_extras = ["none", "ig"]
     seed = 42
     random.seed(seed)
     np.random.seed(seed)
@@ -98,37 +100,37 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = env_creator()
-    agent = env.possible_agents[0].split("_")[0]
+    agent = env.possible_agents[-1].split("_")[0]
 
-    memory = "no_memory"
+    memory = "lstm"
     policy_path = get_policy(
         should_tune=False, new_policy=False, timesteps=20000000, memory=memory
     )
 
+    # compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
     crit_state_pred.crit_compare(agent, memory, env.feature_names, env.act_dict)
-    compare.run_compare(agent, memory, env.feature_names, env.act_dict, device)
 
-    for memry in ["lstm"]:
-        policy_path = get_policy(
-            should_tune=False,
-            new_policy=False,
-            timesteps=20000000,
-            memory=memry,
-        )
-
-        ray.init(ignore_reinit_error=True)
-        env_name = env_creator().metadata["name"]
-
-        register_env(
-            env_name, lambda config: ParallelPettingZooEnv(env_creator(config))
-        )
-        policy_path = "file://" + os.path.abspath(f".{env_name}/{memry}/policies")
-
-        algo = PPO.from_checkpoint(policy_path)
-
-        net = get_torch_from_algo(algo, agent, memry)
-
-        ray.shutdown()
-
-        compare.run_compare(agent, memry, env.feature_names, env.act_dict, device)
-        crit_state_pred.crit_compare(agent, memry, env.feature_names, env.act_dict)
+    # for memry in ["lstm"]:
+    #     policy_path = get_policy(
+    #         should_tune=False,
+    #         new_policy=False,
+    #         timesteps=20000000,
+    #         memory=memry,
+    #     )
+    #
+    #     ray.init(ignore_reinit_error=True)
+    #     env_name = env_creator().metadata["name"]
+    #
+    #     register_env(
+    #         env_name, lambda config: ParallelPettingZooEnv(env_creator(config))
+    #     )
+    #     policy_path = "file://" + os.path.abspath(f".{env_name}/{memry}/policies")
+    #
+    #     algo = PPO.from_checkpoint(policy_path)
+    #
+    #     net = get_torch_from_algo(algo, agent, memry)
+    #
+    #     ray.shutdown()
+    #
+    #     compare.run_compare(agent, memry, env.feature_names, env.act_dict, device)
+    #     crit_state_pred.crit_compare(agent, memry, env.feature_names, env.act_dict)

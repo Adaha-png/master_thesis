@@ -42,9 +42,7 @@ def find_crit_state(seq):
     return max_diff
 
 
-def get_crit_data(histories, agent, m):
-    histories = np.array(histories)
-
+def get_crit_data(histories, agent, m, memory):
     X = []
     diff_vals = []
 
@@ -60,7 +58,18 @@ def get_crit_data(histories, agent, m):
         }
 
         for sequence in history.values():
-            X.append(sequence[n]["observation"])
+            if memory == "lstm":
+                X.append(
+                    [
+                        *sequence[n]["observation"],
+                        *sequence[n]["memory"][0].squeeze().cpu().detach(),
+                        *sequence[n]["memory"][1].squeeze().cpu().detach(),
+                    ]
+                )
+
+            else:
+                X.append(sequence[n]["observation"])
+
             diff = find_crit_state(sequence[n + 1 : n + m + 1])
 
             diff_vals.append(diff)
@@ -77,6 +86,7 @@ def get_crit_data(histories, agent, m):
 
 def compute(
     net,
+    algo,
     agent,
     feature_names,
     act_dict,
@@ -102,7 +112,13 @@ def compute(
         paths = glob.glob(f".{env_name}/{memory}/prediction_data_part[0-9].xz")
         if len(paths) < np.ceil(10 / n_agents):
             paths = get_future_data(
-                net, memory, agent, device, seed=921, finished=paths
+                algo,
+                env_creator,
+                agent,
+                memory=memory,
+                device=device,
+                seed=921,
+                finished=paths,
             )
 
         X = []
@@ -114,6 +130,7 @@ def compute(
                 seq,
                 agent,
                 5,
+                memory,
             )
             X.extend(partX)
             y.extend(party)
@@ -327,11 +344,12 @@ def compute(
             path = f".{env_name}/{memory}/prediction_test_data.xz"
             if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
                 get_future_data(
-                    net_list or net_log,
-                    memory,
+                    algo,
+                    env_creator,
                     agent,
-                    device,
-                    amount_cycles=10000,
+                    memory=memory,
+                    device=device,
+                    amount_cycles=5000,
                     steps_per_cycle=100,
                     test=True,
                     seed=483927,
@@ -343,7 +361,7 @@ def compute(
                 with lzma.open(path, "rb") as f:
                     seq = pickle.load(f)
 
-                X_test, y_test = get_crit_data(seq, agent, 5)
+                X_test, y_test = get_crit_data(seq, agent, 5, memory)
 
                 with lzma.open(
                     f".{env.metadata['name']}/{memory}/{agent}/run_{run}/crit/prediction_test_data.xz",
@@ -470,18 +488,8 @@ def compute(
         accuracy = torch.sum(predicted_labels == y_test) / len(y_test)
         _, _, f_score, _ = precision_recall_fscore_support(y_test, predicted_labels)
 
-    plot_pairs = [
-        ("none", "none"),
-        ("one-hot", "none"),
-        ("none", "ig"),
-        ("one-hot", "ig"),
-    ]
-
-    if (
-        not os.path.exists(
-            f"tex/images/{env.metadata['name']}/{memory}/{agent}/None_{extras}_{explainer_extras}_shap.pgf"
-        )
-        and (extras, explainer_extras) in plot_pairs
+    if not os.path.exists(
+        f"tex/images/{env.metadata['name']}/{memory}/{agent}/None_{extras}_{explainer_extras}_shap.pgf"
     ):
         expl = kernel_explainer(pred_net, X_test, 0, device)
         indices = torch.randperm(len(X_test))[:50]
@@ -498,9 +506,9 @@ def compute(
 
 
 def crit_compare(agent, memory, feature_names, act_dict):
-    runs = 10
-    extras = ["none", "action", "one-hot"]
-    explainer_extras = ["none", "ig", "shap"]
+    runs = 5
+    extras = ["none", "one-hot"]
+    explainer_extras = ["none", "ig"]
 
     table = np.zeros((len(extras), len(explainer_extras)))
 
@@ -515,16 +523,14 @@ def crit_compare(agent, memory, feature_names, act_dict):
 
     net = get_torch_from_algo(algo, agent, memory)
 
-    finished = glob.glob(f".{env_name}/{memory}/{agent}/run_*/table_crit.pkl")
     for run in range(runs):
         print(f"{run=}")
-        # if f".{env_name}/{memory}/{agent}/run_{run}/table_crit.pkl" in finished:
-        #     continue
 
         for i, extra in enumerate(extras):
             for j, expl in enumerate(explainer_extras):
                 outs = compute(
                     net,
+                    algo,
                     agent,
                     feature_names,
                     act_dict,
@@ -539,6 +545,8 @@ def crit_compare(agent, memory, feature_names, act_dict):
 
         with open(f".{env_name}/{memory}/{agent}/run_{run}/table_crit.pkl", "wb") as f:
             pickle.dump(table, f)
+
+    ray.shutdown()
 
     ttest("crit", agent, memory, explainer_extras)
 

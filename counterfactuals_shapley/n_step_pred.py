@@ -2,21 +2,22 @@ import gc
 import lzma
 import os
 import pickle
-from functools import partial
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import ray
 import torch
 from captum.attr import KernelShap
 from dotenv import load_dotenv
+from ray.rllib.algorithms.ppo import PPO
 from sklearn.model_selection import train_test_split
 from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from train_tune_eval.rllib_train import env_creator
 
-from .sim_steps import sim_steps
+from .sim_steps import SimRunner
 from .wrappers import numpyfy
 
 load_dotenv()
@@ -58,7 +59,6 @@ def add_shap(
     extras="none",
     path_ider="pred_data",
 ):
-    # Ensure compatibility with multiple input types
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X).to(device=device, dtype=torch.float32)
     elif isinstance(X, list):
@@ -187,7 +187,7 @@ def add_action(X, net, agent, run, memory, device, name_ider="pred_data", save=T
                 numpyfy(
                     [
                         *obs.cpu(),
-                        torch.argmax(net(obs[:-n_feats].unsqueeze(0))).cpu().item(),
+                        torch.argmax(net(obs[:n_feats].unsqueeze(0))).cpu().item(),
                     ]
                 )
                 for obs in tqdm(X, desc="Adding action")
@@ -261,55 +261,57 @@ def future_sight(
 
 
 def get_future_data(
-    net,
-    memory,
-    agent,
-    device,
-    amount_cycles=10000,
-    steps_per_cycle=100,
-    test=False,
-    seed=0,
-    finished=[],
-):
-    if ray.is_initialized():
-        ray.shutdown()
+    algo: PPO,
+    env_creator,
+    agent_tag: str,
+    *,
+    memory: str = "no_memory",
+    device: str | torch.device = "cpu",
+    amount_cycles: int = 5_000,
+    steps_per_cycle: int = 100,
+    test: bool = False,
+    seed: int = 0,
+    finished: list[str] | None = None,
+) -> list[str] | str:
+    """Generate many short rollouts and save them compressed.
 
-    env = env_creator()
-    env_name = env.metadata["name"]
+    Creates an internal **`SimRunner`** (one per call) so the caller only needs
+    the PPO checkpoint.
+    """
 
-    n_agents = len([ag for ag in env.possible_agents if agent in ag])
+    finished = finished or []
+    runner = SimRunner(algo, env_creator, memory=memory, device=device)
+    env_name = runner.env.metadata["name"]
 
-    if test:
-        training_packs = 1
-    else:
-        training_packs = int(np.ceil(10 / n_agents))
+    n_agents = len([ag for ag in runner.env.possible_agents if agent_tag in ag])
+    packs = 1 if test else int(np.ceil(20 / n_agents))
 
-    paths = []
-    with torch.no_grad():
-        for i in range(0, training_packs):
-            if test:
-                path = f".{env_name}/{memory}/prediction_test_data.xz"
-            else:
-                path = f".{env_name}/{memory}/prediction_data_part{i}.xz"
+    paths: List[str] = []
+    os.makedirs(f".{env_name}/{memory}", exist_ok=True)
+
+    try:
+        for idx in range(packs):
+            fname = (
+                "prediction_test_data.xz" if test else f"prediction_data_part{idx}.xz"
+            )
+            path = f".{env_name}/{memory}/{fname}"
             if path in finished:
                 continue
 
-            sim_part = partial(sim_steps, net, steps_per_cycle, memory, device)
-
-            seed_values = [seed + i * (amount_cycles) + j for j in range(amount_cycles)]
-
-            results = [sim_part(seed_value) for seed_value in tqdm(seed_values)]
+            seeds = [seed + idx * amount_cycles + j for j in range(amount_cycles)]
+            res = [
+                runner.sim_steps(steps_per_cycle, seed=s)
+                for s in tqdm(seeds, desc=f"pack {idx}")
+            ]
+            with lzma.open(path, "wb") as fh:
+                pickle.dump(res, fh)
             paths.append(path)
-            with lzma.open(path, "wb") as f:
-                pickle.dump(results, f)
-
-            del results
+            del res
             gc.collect()
+    finally:
+        runner.close()
 
-    if test:
-        return paths[0]
-
-    return paths
+    return paths[0] if test else paths
 
 
 def train_net(
@@ -341,6 +343,14 @@ def train_net(
         X_test = torch.tensor(numpyfy(X_test), dtype=torch.float32).to(device)
         y_test = torch.tensor(numpyfy(y_test), dtype=torch.float32).to(device)
 
+    train_loader = DataLoader(
+        TensorDataset(X_train, y_train),
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=False,
+    )
+
     # Define loss function and optimizer
     if not criterion:
         criterion = nn.MSELoss()
@@ -353,23 +363,22 @@ def train_net(
 
     # Training loop
     last_lr = scheduler.get_last_lr()
+    lr_val = last_lr[0]
     net.train()
     eval_loss = []
 
+    torch.set_num_threads(10)
+
     for epoch in range(epochs):
         total_loss = 0
-        permutation = torch.randperm(X_train.size()[0])
 
-        for i in range(0, X_train.size()[0], batch_size):
+        for batch_x, batch_y in train_loader:
             optimizer.zero_grad()
-
-            indices = permutation[i : i + batch_size]
-            batch_x, batch_y = X_train[indices], y_train[indices]
 
             outputs = net(batch_x)
 
-            if len(batch_y.shape) == 1:
-                batch_y = batch_y.unsqueeze(1)
+            if len(outputs.size()) == 2:
+                outputs = outputs.squeeze()
 
             loss = criterion(outputs, batch_y)
             loss.backward()
@@ -378,7 +387,7 @@ def train_net(
             total_loss += loss.item()
 
         print(
-            f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}, LR: {last_lr[0]}                     ",
+            f"Epoch {epoch + 1}/{epochs}, Loss: {total_loss}, LR: {lr_val}                     ",
             end="\r",
         )
 
@@ -391,11 +400,15 @@ def train_net(
         eval_loss.append(test_loss)
         net.train()
         scheduler.step(test_loss)
+        lr_val = last_lr[0]
         if scheduler.get_last_lr() != last_lr:
             last_lr = scheduler.get_last_lr()
 
         if last_lr[0] < 5e-7:
             break
+    print(
+        f"Training finished with Loss: {total_loss}, LR: {last_lr[0]}                     "
+    )
 
     plt.clf()
     plt.plot(range(1, 1 + len(eval_loss), 1), eval_loss)
@@ -525,6 +538,7 @@ def plot_losses(action_expl_pair_list, memory, agent, name_ider, n_runs=10):
     plt.legend()
     plt.tight_layout()
 
+    os.makedirs(f"tex/images/{env.metadata['name']}/{memory}/{agent}", exist_ok=True)
     plt.savefig(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/{name_ider}_losses_plot.pgf",
         backend="pgf",

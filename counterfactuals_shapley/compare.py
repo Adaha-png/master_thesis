@@ -168,6 +168,7 @@ def get_torch_from_algo(algo, agent, memory):
 
 def compute(
     net,
+    algo,
     agent,
     feature_names,
     act_dict,
@@ -198,7 +199,13 @@ def compute(
         n_agents = len([ag for ag in env.possible_agents if agent in ag])
         if len(paths) < int(np.ceil(10 / n_agents)):
             paths = get_future_data(
-                net, memory, agent, device, seed=921, finished=paths
+                algo,
+                env_creator,
+                agent,
+                memory=memory,
+                device=device,
+                seed=921,
+                finished=paths,
             )
 
         X = []
@@ -441,11 +448,12 @@ def compute(
             path = f".{env_name}/{memory}/prediction_test_data.xz"
             if not os.path.exists(f".{env_name}/{memory}/prediction_test_data.xz"):
                 get_future_data(
-                    net_list or net_log,
-                    memory,
+                    algo,
+                    env_creator,
                     agent,
-                    device,
-                    amount_cycles=10000,
+                    memory=memory,
+                    device=device,
+                    amount_cycles=5000,
                     steps_per_cycle=100,
                     test=True,
                     seed=483927,
@@ -599,14 +607,7 @@ def compute(
         f"tex/images/{env.metadata['name']}/{memory}/{agent}/[0-9]_{extras}_{explainer_extras}_shap.pgf"
     )
 
-    plot_pairs = [
-        ("none", "none"),
-        ("one-hot", "none"),
-        ("none", "shap"),
-        ("one-hot", "shap"),
-    ]
-
-    if len(plot_paths) < len(y[0]) and (extras, explainer_extras) in plot_pairs:
+    if len(plot_paths) < len(y[0]):
         expl = [kernel_explainer(pred_net, X_test, i, device) for i in range(len(y[0]))]
         indices = torch.randperm(len(X_test))[:50]
         make_plots(
@@ -704,9 +705,9 @@ def ttest(name_ider, agent, memory, explainer_extras):
         df = pandas.DataFrame(data=mean_table, columns=explainer_extras)
         f.write(df.to_latex())
 
-    p_table = np.ones((3, 3), dtype=np.float32)
-    for i in range(3):
-        for j in range(3):
+    p_table = np.ones((2, 2), dtype=np.float32)
+    for i in range(len(p_table)):
+        for j in range(len(p_table[i])):
             if j == 0:
                 p_table[i, j] = ttest_ind(
                     full_table[:, 0, 0],
@@ -728,8 +729,8 @@ def ttest(name_ider, agent, memory, explainer_extras):
 def run_compare(agent, memory, feature_names, act_dict, device):
     runs = 10
 
-    extras = ["none", "action", "one-hot"]
-    explainer_extras = ["none", "ig", "shap"]
+    extras = ["none", "one-hot"]
+    explainer_extras = ["none", "ig"]
 
     table = np.zeros((len(extras), len(explainer_extras)))
 
@@ -743,8 +744,6 @@ def run_compare(agent, memory, feature_names, act_dict, device):
 
     net = get_torch_from_algo(algo, agent, memory)
 
-    ray.shutdown()
-
     for run in range(runs):
         print(f"{run=}")
 
@@ -753,6 +752,7 @@ def run_compare(agent, memory, feature_names, act_dict, device):
                 print(f"Computing for {extra=} and {expl=}")
                 outs = compute(
                     net,
+                    algo,
                     agent,
                     feature_names,
                     act_dict,
@@ -768,6 +768,8 @@ def run_compare(agent, memory, feature_names, act_dict, device):
 
         with open(f".{env_name}/{memory}/{agent}/run_{run}/table_pred.pkl", "wb") as f:
             pickle.dump(table, f)
+
+    ray.shutdown()
 
     ttest("pred", agent, memory, explainer_extras)
 
