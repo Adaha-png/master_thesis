@@ -23,4 +23,12 @@ tex/main-blx.bib
 .*/*/prediction_test_data.xz
 .*/*/tempdir
 .*/*/*/run_*
+.knights_archers_zombies_v10
+.knights_archers_zombies_v10_unstacked
+.knights_archers_zombies_v10_stacked
+.knights_archers_zombies_v10_tmp
+.simple_spread_v3
+.simple_spread_v3_unstacked
+.simple_spread_v3_stacked
+.simple_spread_v3_tmp
 

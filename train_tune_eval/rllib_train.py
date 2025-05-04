@@ -14,9 +14,7 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 from pettingzoo.mpe import simple_spread_v3
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
-from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
-from torch import nn
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 load_dotenv()
@@ -54,12 +52,17 @@ def simple_spread_env(config):
         + agent_feature_names
         + comms_feature_names
     )
-    full_feature_names = []
     frames = 1
+    coords_ind = (
+        (frames - 1) * len(feature_names) + 2,
+        (frames - 1) * len(feature_names) + 3,
+    )
+
+    full_feature_names = []
     if frames > 1:
         for i in range(frames):
             for name in feature_names:
-                full_feature_names.append(f"{name}, {i}")
+                full_feature_names.append(f"{name} {i}")
         feature_names = full_feature_names
 
     act_dict = {
@@ -71,13 +74,10 @@ def simple_spread_env(config):
     }
 
     env = simple_spread_v3.parallel_env(**env_kwargs)
-    # Add black death wrapper so the number of agents stays constant
-    # env = ss.frame_stack_v2(env, stack_size=frames)
+    env = ss.frame_stack_v2(env, stack_size=frames)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset()
-
-    coords_ind = (2, 3)
 
     setattr(env, "coords_ind", coords_ind)
     setattr(env, "act_dict", act_dict)
@@ -109,6 +109,7 @@ def kaz_env(config):
         "vel x self",
         "vel y self",
     ]
+
     for ent_type in ents:
         kwarg = ent_type
         if ent_type == "num_swords":
@@ -124,6 +125,19 @@ def kaz_env(config):
                     f"vel y {ent_type.split('_')[-1][:-1]} {i}",
                 ]
             )
+
+    full_feature_names = []
+    frames = 1
+    coords_ind = (
+        (frames - 1) * len(feature_names) + 1,
+        (frames - 1) * len(feature_names) + 2,
+    )
+    if frames > 1:
+        for i in range(frames):
+            for name in feature_names:
+                full_feature_names.append(f"{name} {i}")
+        feature_names = full_feature_names
+
     act_dict = {
         0: "idle",
         1: "rotate clockwise",
@@ -135,12 +149,10 @@ def kaz_env(config):
 
     env = env_fn.parallel_env(**env_kwargs)
 
-    # env = ss.frame_stack_v2(env)
+    env = ss.frame_stack_v2(env, stack_size=frames)
     env = ss.flatten_v0(env)
     env = ss.black_death_v3(env)
     env.reset(seed=config["seed"])
-
-    coords_ind = (1, 2)
 
     setattr(env, "coords_ind", coords_ind)
     setattr(env, "act_dict", act_dict)
@@ -237,7 +249,7 @@ def run_train(
     temp_env.close()
     config["seed"] = seed
     algo = config.build()
-    # 6. Training Loop
+
     training_iters = max(max_timesteps // steps_per_iter, 1)
 
     max_reward_mean = -np.inf
@@ -246,11 +258,13 @@ def run_train(
         print(
             f"Iteration {i + 1}/{training_iters}:\treward: {result['env_runners']['episode_reward_mean']:.2f}"
         )
+
         if not tuning:
             if result["env_runners"]["episode_reward_mean"] > max_reward_mean:
                 max_reward_mean = result["env_runners"]["episode_reward_mean"]
                 algo.save(checkpoint_dir=save_path)
-        if result["env_runners"]["episode_reward_mean"] > -50:
+
+        if result["env_runners"]["episode_reward_mean"] > -50 and False:
             print("Truncating training")
             break
 

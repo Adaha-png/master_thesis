@@ -1,4 +1,6 @@
 import os
+import re
+from collections import defaultdict
 from functools import partial
 
 import matplotlib.pyplot as plt
@@ -37,6 +39,17 @@ def kernel_explainer(net, X, target, device):
     return explainer
 
 
+def _prefix(name: str) -> str:
+    if isinstance(name, int):
+        return "One-hot"
+    elif "IG" in name:
+        return "IG"
+    elif "SHAP" in name:
+        return "SHAP"
+    else:
+        return re.sub(r"(?:\s+\d+)+$", "", name)
+
+
 def shap_plot(
     agent,
     memory,
@@ -47,16 +60,38 @@ def shap_plot(
     extras,
     explainer_extras,
     slices,
+    aggregate_by_prefix=True,
 ):
+    if aggregate_by_prefix == True:
+        slices = []
+
     env = env_creator()
     shap_values = explainer.shap_values(X)
 
     if isinstance(shap_values, list):
         shap_values = np.stack(shap_values, axis=-1)
 
-    assert shap_values.shape[1] == len(
-        feature_names
-    ), "Mismatch between SHAP values and feature names dimensions."
+    assert (
+        shap_values.shape[1] == len(feature_names)
+    ), f"Mismatch between SHAP values, {shap_values.shape}, and feature names dimensions. {len(feature_names)}"
+
+    if aggregate_by_prefix:
+        # Map prefix ➜ list[ column indices ]
+        groups = defaultdict(list)
+        for idx, name in enumerate(feature_names):
+            groups[_prefix(name)].append(idx)
+
+        # Build new matrices with one column per prefix
+        new_shap_cols, new_X_cols, new_names = [], [], []
+        for pref, idxs in groups.items():
+            new_shap_cols.append(shap_values[:, idxs].sum(axis=1))
+            new_X_cols.append(X[:, idxs].sum(axis=1))
+            new_names.append(pref)
+
+        # (n_instances, n_groups)
+        shap_values = np.column_stack(new_shap_cols)
+        X = np.column_stack(new_X_cols)
+        feature_names = new_names
 
     if slices and len(slices) > 0:
         aggregated_shap_list = []
@@ -119,7 +154,7 @@ def shap_plot(
         }
     )
 
-    _, ax = plt.subplots(figsize=(6, 7.4))
+    _, ax = plt.subplots(figsize=(6, 8))
 
     scatter = ax.scatter(
         flattened_shap_values,
@@ -147,7 +182,7 @@ def shap_plot(
     plt.savefig(os.path.join(out_dir, filename), backend="pgf")
     plt.close()
 
-    if explainer_extras != "none":
+    if explainer_extras != "none" and slices:
         plt.clf()
 
         start = slices[-2]
@@ -166,12 +201,12 @@ def shap_plot(
         flattened_feature_values_subset = X_subset[:, top_indices].flatten()
 
         norm_subset = plt.Normalize(
-            np.min(flattened_feature_values_subset),
-            np.max(flattened_feature_values_subset),
+            -1,
+            1,
         )
         colors_subset = plt.cm.viridis(norm_subset(flattened_feature_values_subset))
 
-        _, ax_subset = plt.subplots(figsize=(6, 7.4))
+        _, ax_subset = plt.subplots(figsize=(6, 8))
         scatter_subset = ax_subset.scatter(
             flattened_shap_subset,
             repeated_feature_names_subset,
