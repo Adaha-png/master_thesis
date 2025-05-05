@@ -16,6 +16,8 @@ $(TARGET).aux: $(TARGET).tex
 	$(PDFLATEX) $(TARGET).tex
 
 clean:
-	rm -f $(TARGET).aux $(TARGET).bbl $(TARGET).blg $(TARGET).log $(TARGET).out $(TARGET).toc $(TARGET).lof $(TARGET).lot $(TARGET).bcf $(TARGET).run.xml
+	rm -f $(TARGET).aux $(TARGET).bbl $(TARGET).blg $(TARGET).log $(TARGET).out $(TARGET).toc $(TARGET).lof $(TARGET).lot $(TARGET).bcf $(TARGET).run.xml $(TARGET).fdb_latexmk $(TARGET).auxlock $(TARGET).fls
+
+
 
 
